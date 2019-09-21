@@ -19,13 +19,13 @@ OnlyChain既不启动也不基于OCSystem运行任何初始的公共区块链。
 **安装指南**
 ---
 
-#### CentOS 7.0软件包安装
+#### 在CentOS 7.0 环境下安装OCSystem
 ```sh
 $ wget https://github.com/OCSystem/OCSystem/releases/download/v1.8.3/OCSystem.deb
 $ sudo apt install ./OCSystem-1.0-CentOS-7.0_amd64.deb
 ```
 
-#### CentOS 7.0软件包卸载
+#### 在CentOS 7.0 环境下卸载OCSystem
 ```sh
 $ sudo apt delete OCSystem
 ```
