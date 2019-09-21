@@ -39,7 +39,7 @@ QQ群：暂无
 
 
 ## 执照
-[LGPL](./LICENSE)
+[LGPL 3.0](./LICENSE)
 
 
 ## 注意事项
