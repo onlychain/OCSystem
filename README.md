@@ -20,14 +20,20 @@ OnlyChain既不启动也不基于OCSystem运行任何初始的公共区块链。
 ---
 
 #### CentOS 7.0软件包安装
+```sh
 $ wget https://github.com/OCSystem/OCSystem/releases/download/v1.8.3/OCSystem.deb
 $ sudo apt install ./OCSystem-1.0-CentOS-7.0_amd64.deb
+```
 
 #### CentOS 7.0软件包卸载
+```sh
 $ sudo apt delete OCSystem
+```
 
 #### 启动命令
-php start
+```sh
+$ php start
+```
 
 ## 支持的操作系统
 OCSystem当前支持以下操作系统：
