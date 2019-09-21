@@ -39,8 +39,8 @@ QQ群：暂无
 
 
 ## 执照
-LGPL 3.0
+[LGPL](./LICENSE)
 
 
 ## 注意事项
-有关版权和许可条款，请参阅LICENSE。
+有关版权和许可条款，请参阅[LICENSE](./LICENSE)。
