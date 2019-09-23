@@ -1,0 +1,36 @@
+{
+  "require": {
+    "php": ">=7.1.6",
+    "monolog/monolog": "@stable",
+    "hassankhan/config": "@stable",
+    "voku/anti-xss": "@stable",
+    "illuminate/view": "^5.1",
+    "filp/whoops": "@stable",
+    "graylog2/gelf-php": "@stable",
+    "php-amqplib/php-amqplib": "@stable",
+    "php-ds/php-ds": "@stable",
+    "symfony/console": "@stable"
+  },
+  "autoload": {
+    "psr-4": {
+      "Server\\": "src/Server",
+      "app\\": "src/app",
+      "test\\": "src/test"
+    },
+    "files": [
+      "src/Server/helpers/Common.php"
+    ]
+  },
+  "authors": [
+    {
+      "name": "Diskarrogance",
+      "email": "476431006@qq.com",
+      "homepage": "https://github.com/Diskarrogance"
+    }
+  ],
+  "name": "diskarrogance/alexstrasza",
+  "type": "library",
+  "keywords": ["server", "swoole", "distributed"],
+  "description": "In order to develop the api server",
+  "license": "MIT"
+}
