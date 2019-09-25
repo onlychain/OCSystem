@@ -3,49 +3,49 @@
 欢迎来到OCSystem源代码库！该系统可以让企业或个人开发者以超低门槛创建更多价值应用。
 OCSystem的一些突破性功能包括：
 
-1. 免手续费交易
-1. 零门槛注册机制
-1. 低延迟块确认
-1. 节点对客户由Swoole提供通信支撑
-1. 支持主流的物联网通信协议
-1. 采用改进型UTXO模型（未来考虑公私链跨链协同）
-1. 支持公私链跨链协同的合约系统
-1. 支持定块交易
+1. Free Rate Limited Transactions
+1. Zero threshold registration mechanism
+1. Low Latency Block confirmation
+1. The node is a communication support for the customer by Swoole
+1. Support for mainstream Internet of things communication protocols
+1. Adopt an improved UTXO model (considering public-private chain cross-chain collaboration in the future)
+1. Support public - private chain cross - chain collaboration contract system
+1. Support fixed block transaction
 
-OCSystem是根据开源LGPL许可证发布的，按“原样”提供，不附带任何明示或暗示的担保。OCSystem提供的任何安全性部分取决于其使用，配置和部署方式。OCSystem建立在许多第三方库（例如WABT（Apache许可）和WAVM（BSD 3子句））的基础上，它们也按“原样”提供，没有任何形式的保证。在不限制前述内容的一般性的情况下，OnlyChain不作任何陈述或保证OCSystem或任何第三方库将按预期执行或不存在错误，错误或错误代码。两者都可能以大或小的方式失败，可能完全或部分地限制功能或危害计算机系统。如果您使用或实施OCSystem，您需要自担风险。
-OnlyChain既不启动也不基于OCSystem运行任何初始的公共区块链。
+      OCSystem is distributed under the open source LGPL license and is provided "as is" without any express or implied warranty.Any security provided by OCSystem depends on how it is used, configured, and deployed.OCSystem is based on many third-party libraries, such as WABT (Apache license) and WAVM (BSD 3 clause), which are also provided "as is" without any form of warranty.Without limiting the generality of the foregoing, OnlyChain makes no representation or warranty that OCSystem or any third party library will perform as expected or will be free of errors, errors, or error codes.Both may fail in large or small ways, may completely or partially limit functionality or compromise computer systems.If you use or implement OCSystem, you do so at your own risk.OnlyChain neither starts nor runs any initial public blockchain based on OCSystem.
+
 
 ---
-**安装指南**
+**Installation Guide**
 ---
 
-#### 在CentOS 7.2 环境下安装OCSystem
+#### Install OCSystem on CentOS 7.2
 ```sh
-整理中，尽情期待
+Sorting out, enjoy looking forward to
 ```
 
-#### 在CentOS 7.2 环境下卸载OCSystem
+#### Uninstall OCSystem on CentOS 7.2
 ```sh
-整理中，尽情期待
+Sorting out, enjoy looking forward to
 ```
 
-#### 启动命令
+#### Startup Commands
 ```sh
-整理中，尽情期待
+Sorting out, enjoy looking forward to
 ```
 
-## 支持的操作系统
-OCSystem当前支持以下操作系统：
+## Supported operating systems
+The following operating systems are currently supported：
 1. CentOS 7.2
 
 
-## 极客社区频道
-后续公布
+## Geek community channel
+To Be Advised Later
 
 
-## 执照
+## LICENSE
 [LGPL 3.0](./LICENSE)
 
 
-## 注意事项
-有关版权和许可条款，请参阅[LICENSE](./LICENSE)。
+## NOTES
+Please refer to the copyright and license terms[LICENSE](./LICENSE)。
