@@ -1,9 +1,0 @@
-language: php
-
-php:
-  - 5.4
-
-install:
-  - composer install
-
-before_script: phpenv config-add phpconfig.ini
