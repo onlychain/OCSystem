@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit bootstrap="src/BitcoinPHP/Tests/BootStrap.php" colors="true">
+    <testsuites>
+        <testsuite name="All">
+            <file>src/BitcoinPHP/Tests/BitcoinECDSATest.php</file>
+        </testsuite>
+    </testsuites>
+
+    <logging>
+        <log type="junit" target="build/junit.xml" logIncompleteSkipped="false" />
+    </logging>
+</phpunit>
