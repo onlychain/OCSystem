@@ -1,7 +1,7 @@
-# OCSystem - 区块链底层系统
+# OCSystem - Blockchain underlying system
 
-欢迎来到OCSystem源代码库！该系统可以让企业或个人开发者以超低门槛创建更多价值应用。
-OCSystem的一些突破性功能包括：
+Welcome to the OCSystem source code library!The system allows enterprise or individual developers to create more value applications with minimal barriers to entry.
+Some of the breakthrough features of OCSystem include:
 
 1. Free Rate Limited Transactions
 1. Zero threshold registration mechanism
