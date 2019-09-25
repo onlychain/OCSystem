@@ -323,9 +323,12 @@ class TradingProcess extends Process
     /**
      * 验证交易金额是否足够，交易引用是否合法
      * @param array $trading
+     * @param string 用户地址
+     * @param int $type 1：正常交易，清理钱包以及缓存中的数据
+     *                  2：仅仅只做验证，不清理数据
      * @return array|bool
      */
-    public function checkTrading($trading = [], $address = '')
+    public function checkTrading($trading = [], $address = '', $type = 1)
     {
         //定义全局变量
         global $del_trading;
@@ -358,14 +361,25 @@ class TradingProcess extends Process
             'total_cost'    =>  0,
             'total_val'     =>  0,
         ];
-
-        array_map(function ($tx, $to) use ($address, &$purses, &$availabler_ecords, $top_block_height)
+        /**
+         * 同时循环vin与vout进行交易验证
+         * $address用户钱包地址
+         * $purses用户所用的交易输出
+         * $availabler_ecords交易数据统计
+         * $top_block_height当前最高区块
+         * $type 1:正常交易， 2：不验证锁定时间，不进行交易处理，仅做交易可用性验证
+         */
+        array_map(function ($tx, $to) use ($address, &$purses, &$availabler_ecords, $top_block_height, $type)
         {
             //重新声明两个全局变量
             global $del_trading;
             if($tx != null && isset($purses[$tx['txId']])){
+                var_dump($purses[$tx['txId']]['lockTime']);
                 //判断交易是否被锁定
-                if($top_block_height < $purses[$tx['txId']]['lockTime']) return returnError('当前交易不可用');
+                if($top_block_height < $purses[$tx['txId']]['lockTime'])
+
+//                    return returnError('当前交易不可用');
+
                 //存储待销毁的交易
                 $del_trading[] =  $tx['txId'];
 
@@ -399,26 +413,28 @@ class TradingProcess extends Process
                     'value'     =>  $to['value'],
                     'type'      =>  1,
                     'address'   =>  $to['address'],
-
                 ];
                 $availabler_ecords['total_cost'] += $to['value'];
             }
         }, $trading['vin'], $trading['vout']);
-        //判断交易金额是否充足
-        if($availabler_ecords['total_val'] < $availabler_ecords['total_cost']){
-            return returnError('金额不足.', 1001);
-        }elseif($availabler_ecords['total_val'] > $availabler_ecords['total_cost']){
-            $availabler_ecords['vout'][]    =  [
-                'value'     =>  $availabler_ecords['total_val'] - $availabler_ecords['total_cost'],
-                'type'      =>  1,
-                'address'   =>  $address,
-            ];
+        //正常交易验证
+        if($type == 1){
+            //判断交易金额是否充足
+            if($availabler_ecords['total_val'] < $availabler_ecords['total_cost']){
+                return returnError('金额不足.', 1001);
+            }elseif($availabler_ecords['total_val'] > $availabler_ecords['total_cost']){
+                $availabler_ecords['vout'][]    =  [
+                    'value'     =>  $availabler_ecords['total_val'] - $availabler_ecords['total_cost'],
+                    'type'      =>  1,
+                    'address'   =>  $address,
+                ];
+            }
+            //清理缓存
+            $purses = $this->PurseModel->rushPurse($address, $purses, $del_trading);
+            //存入撤回用缓存
+            CatCacheRpcProxy::getRpc()['Using'] = $this->Using;
         }
-        //清理缓存
-        $purses = $this->PurseModel->rushPurse($address, $purses, $del_trading);
-//        addPurseTradings
-        //存入撤回用缓存
-        CatCacheRpcProxy::getRpc()['Using'] = $this->Using;
+
         //删除全局变量
         $del_trading = [];
         return returnSuccess($availabler_ecords);

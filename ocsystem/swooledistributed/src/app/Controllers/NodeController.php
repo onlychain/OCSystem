@@ -11,6 +11,7 @@ use MongoDB;
 use app\Process\VoteProcess;
 use app\Process\NodeProcess;
 use app\Process\BlockProcess;
+use app\Process\TimeClockProcess;
 use app\Process\TradingProcess;
 use app\Process\SuperNodeProcess;
 use app\Process\ConsensusProcess;
@@ -156,6 +157,15 @@ class NodeController extends Controller
                                         ->getRpcCall(SuperNodeProcess::class)
                                         ->getVoteList($super_where, $super_data, 1, 1000);
         return $this->http_output->lists($super_nodes['Data']);
+
+    }
+
+
+    public function http_examinationNode()
+    {
+        $super_nodes = ProcessManager::getInstance()
+                                    ->getRpcCall(TimeClockProcess::class)
+                                    ->runTimeClock();
 
     }
 

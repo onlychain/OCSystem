@@ -24,6 +24,17 @@ use MongoDB;
 class VoteModel extends Model
 {
 
+    /**
+     * 当前区块高度
+     * @var
+     */
+    protected $now_top_height;
+
+    /**
+     * 当前轮次
+     * @var
+     */
+    protected $now_round;
 
     /**
      * 当被loader时会调用这个方法进行初始化
@@ -32,7 +43,16 @@ class VoteModel extends Model
     public function initialization(&$context)
     {
         $this->setContext($context);
+        //获取当前区块高度
+        $this->now_top_height = ProcessManager::getInstance()
+                                            ->getRpcCall(BlockProcess::class)
+                                            ->getTopBlockHeight();
+        //获取当前轮次
+        $this->now_round = ProcessManager::getInstance()
+                                        ->getRpcCall(TimeClockProcess::class)
+                                        ->getRounds();
     }
+
 
     /**
      * 插入投票数据到数据库
@@ -67,30 +87,16 @@ class VoteModel extends Model
      * @param array $vote_data
      * @return bool
      */
-    public function checkVote($vote_data = [])
+    public function checkVote($vote_data = [], $type = 1)
     {
         if(empty($vote_data)){
             return returnError('请传入投票验证信息');
         }
-        if(empty($vote_data['value'])){
-            return returnError('质押数量有误1');
-        }elseif ($vote_data['value'] < 200000000){
-            return returnError('质押数量有误2');
-        }elseif(($vote_data['value'] % 2) != 0){
-            return returnError('质押数量有误,必须是10000的倍数');
-        }
-        //获取最新的区块高度
-        $now_top_height = ProcessManager::getInstance()
-                                    ->getRpcCall(BlockProcess::class)
-                                    ->getTopBlockHeight();
-        //获取当前区块轮次
-        $now_round = ProcessManager::getInstance()
-                                        ->getRpcCall(TimeClockProcess::class)
-                                        ->getRounds();
+
         //验证投的区块高度是否有问题
-        $vote_rounds = $vote_data['rounds'] - $now_round;
+        $vote_rounds = $vote_data['rounds'] - $this->now_round;
         if($vote_rounds <= 0 || $vote_rounds > 2)
-            return returnError('投票轮次有误!当前轮次:'.$now_round);
+            return returnError('投票轮次有误!当前轮次:'.$this->now_round);
 
         /**
          * 验证锁定时间，一般提前两轮进行投票
@@ -99,10 +105,17 @@ class VoteModel extends Model
             return returnError('质押金额必须是整数');
         /**
          * 质押时间必须是质押金额乘以300个块加上所投轮次的结束时间
+         * type != 1 用已经锁定的交易重新进行投票，只需要判断是否过期
          * 允许有2个块的误差时间
          */
-        if(abs(((floor($vote_data['value'] / 100000000) * 300) + $now_top_height) - $vote_data['lockTime'])  > 2)
-            return returnError('质押时间有误');
+        if($type == 1){
+            if(abs(((floor($vote_data['value'] / 100000000) * 300) + $this->now_top_height) - $vote_data['lockTime'])  > 2)
+                return returnError('质押时间有误');
+
+        }else{
+            if($this->now_top_height >= $vote_data['lockTime'])
+                return returnError('该交易已经解锁，请重新质押.');
+        }
 
         /**
          * 质押金额必须是10000以上，测试2
@@ -122,10 +135,42 @@ class VoteModel extends Model
                                     ->getVoteAggregation($vote_march, $vote_ops, 1, 1000000);
         //质押追加改为10000的倍数，因此不需要再查库验证
         if(empty($vote_data['value']) && $vote_data['value'] < 500000000){
-            return returnError('质押数量有误1');
+            return returnError('质押数量有误');
         }elseif(!empty($vote_res['Data']) && ($vote_res['Data']['value'] + $vote_data['value']) < 200000000){
             return returnError('质押数量有误');
         }
         return returnSuccess();
+    }
+
+    /**
+     * 验证重新投票的交易
+     * @param array $vote_data
+     * @return bool
+     */
+    public function checkVoteAgain($vote_data = [], $trading = [])
+    {
+        //验证输入的投票信息
+        if(empty($vote_data))
+            return returnError('请输入投票信息.');
+
+        //验证质押交易是否为空
+        if(empty($trading))
+            return returnError('请输入质押交易.');
+
+        //验证质押类型
+        if($vote_data['lockType'] != 2)
+            return returnError('交易质押类型有误!.');
+
+        //验证投票轮次
+        $vote_rounds = $vote_data['rounds'] - $this->now_round;
+        if($vote_rounds <= 0 || $vote_rounds > 2)
+            return returnError('投票轮次有误!当前轮次:'.$this->now_round);
+
+        //验证质押是否到期
+        if($vote_data['lockTime'] <= $this->now_top_height)
+            return returnError('该交易已经解锁.');
+
+
+
     }
 }

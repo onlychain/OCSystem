@@ -174,6 +174,7 @@ class ConsensusProcess extends Process
     public function coreNode()
     {
 //        $now_time = CatCacheRpcProxy::getRpc()->offsetGet('topBlockHash');
+        var_dump($this->Identity);
         while ($this->Identity == 'core'){
             //获取当前时间钟时间
             var_dump('获取时间');
@@ -213,39 +214,32 @@ class ConsensusProcess extends Process
                 $trading_res = ProcessManager::getInstance()
                                             ->getRpcCall(TradingPoolProcess::class)
                                             ->getTradingPoolList($trading_where, $trading_data, $page, $pagesize);
-                var_dump(2);
                 if(!$trading_res['IsSuccess']){
 //                    return returnError('数据获取失败!');
                 }
-                var_dump(3);
                 foreach ($trading_res['Data'] as $tr_key => $tr_val){
 //                    $decode_trading[] = $this->TradingEncode->decodeTrading($tr_val['trading']);
                     $encode_trading[] = $tr_val['trading'];
                     $tradings[] = $tr_val['_id'];
                 }
-                var_dump(4);
                 //验证数据是否为空
                 if(!empty($trading_res['Data'])){
                     //获取交易数量
                     $trading_num = count($tradings);
                     //生成默克尔树
-                    var_dump(5);
                     $merker_tree = $this->MerkleTree->setNodeData($tradings)
                                                     ->bulidMerkleTreeSimple();
                     //获取默克尔根
                     $morker_tree_root = array_pop($merker_tree);
                     //获取最新的区块哈希
-                    var_dump(6);
                     $top_block_hash = ProcessManager::getInstance()
                                                     ->getRpcCall(BlockProcess::class)
                                                     ->getTopBlockHash();
                     //获取最新的区块高度
-                    var_dump(7);
                     $top_block_height = ProcessManager::getInstance()
                                                         ->getRpcCall(BlockProcess::class)
                                                         ->getTopBlockHeight();
                     //构建区块头部
-                    var_dump(8);
                     $black_head = $this->BlockHead->setMerkleRoot($morker_tree_root)
                                                     ->setParentHash($top_block_hash)//上一个区块的哈希
                                                     ->setThisTime(time())//区块生成时间
@@ -256,7 +250,6 @@ class ConsensusProcess extends Process
                                                     ->packBlockHead();
                     //发起共识
 
-                    var_dump(9);
                     //先空着
 
                     $consensus_res['IsSuccess'] = false;
@@ -267,7 +260,6 @@ class ConsensusProcess extends Process
                     $block_head_res = ProcessManager::getInstance()
                                                 ->getRpcCall(BlockProcess::class)
                                                 ->insertBloclHead($black_head);
-                    var_dump(10);
                     //删除交易
                     $del_trading = ProcessManager::getInstance()
                                                 ->getRpcCall(BlockProcess::class)
@@ -283,15 +275,11 @@ class ConsensusProcess extends Process
                                         ->setTopBlockHeight($black_head['height']);
 
                     }
-                    var_dump(11);
                     //刷新钱包
                     $this->bookedPurse($encode_trading);
-                    var_dump(12);
-
 //                    ProcessManager::getInstance()
 //                                    ->getRpcCall(TradingProcess::class)
 //                                    ->refreshPurse($decode_trading);
-                    var_dump(12);
                     //清空被使用的交易缓存
                     CatCacheRpcProxy::getRpc()['Using'] = [];
                     var_dump("=========================================区块哈希=========================================");
@@ -417,6 +405,8 @@ class ConsensusProcess extends Process
         ProcessManager::getInstance()
                         ->getRpcCall(IncentivesProcess::class)
                         ->updateIncentivesTable($incentives, $table_num);
+        var_dump($incentives[1]);
+        var_dump($tradings);
         $this->TradingModel->createTradingMany($tradings);
     }
 
@@ -442,6 +432,7 @@ class ConsensusProcess extends Process
         $trading['tx'][0]['coinbase'] = 'No one breather who is worthier.';
         $trading['from'] = get_instance()->config['address'];
         $count = $voter_count > 500 ? 500 : $voter_count;
+        var_dump($voters);
         for($i = 0; $i < $count; ++$i){
             $trading['to'][$i] = [
                 'address'   =>  $voters[$i]['address'],

@@ -53,28 +53,34 @@ class VoteController extends Controller
 
         //反序列化交易
         $decode_trading = $this->TradingEncodeModel->decodeTrading($vote_data['pledge']['trading']);
-        $check_vote['value'] = $decode_trading['vout'][0]['value'];//质押金额
+        if($decode_trading['lockType'] != 2){
+            return $this->http_output->notPut('', '质押类型有误.');
+        }
+        $check_vote['value'] = $decode_trading['vout'][0]['value'];//质押金额(循环获取)
         $check_vote['rounds'] = $vote_data['rounds'];//所投轮次
         $check_vote['lockTime'] = $decode_trading['lockTime'];//质押时间
         $check_vote['voter'] = $vote_data['voter'];//质押人员
-        $check_vote_res = $this->VoteModel->checkVote($check_vote);
+        $vote_type = $vote_data['voteAgain'] ?? 1;
+
+        $check_vote_res = $this->VoteModel->checkVote($check_vote, $vote_type);
         if(!$check_vote_res['IsSuccess']) {
             return $this->http_output->notPut('', $check_vote_res['Message']);
         }
         //验证交易是否可用
         $check_trading_res = ProcessManager::getInstance()
-                                    ->getRpcCall(TradingProcess::class)
-                                    ->checkTrading($decode_trading, $vote_data['voter']);
+                                            ->getRpcCall(TradingProcess::class)
+                                            ->checkTrading($decode_trading, $vote_data['voter'], $vote_type);
         if(!$check_trading_res['IsSuccess']){
             return $this->http_output->notPut($check_trading_res['Code'], $check_trading_res['Message']);
         }
 
-        //交易入库
-        $trading_res = $this->TradingModel->createTradingEecode($vote_data['pledge']);
-        if(!$trading_res['IsSuccess']){
-            return $this->http_output->notPut('', $trading_res['Message']);
+        if($vote_type == 1){
+            //交易入库
+            $trading_res = $this->TradingModel->createTradingEecode($vote_data['pledge']);
+            if(!$trading_res['IsSuccess']){
+                return $this->http_output->notPut('', $trading_res['Message']);
+            }
         }
-
         //交易验证成功，投票写入数据库
         $check_vote['address'] = $vote_data['address'];
         $vote_res = $this->VoteModel->submitVote($check_vote);

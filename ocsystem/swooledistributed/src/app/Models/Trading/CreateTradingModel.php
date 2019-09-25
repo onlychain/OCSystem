@@ -52,6 +52,7 @@ class CreateTradingModel extends Model
         }
         //存储交易输入
         $vin = [];
+        $vout = [];//找零交易输出
         //用来做金额统计
         $total_value = 0;
         //存储获取的txId
@@ -111,8 +112,16 @@ class CreateTradingModel extends Model
                 return returnError('该账户没有足够的token!');
             }
         }
+        //拼接找零交易输出
+        if($total_value > $value){
+            $vout = [
+                'address'   => $address,
+                'value'     => $total_value - $value,
+                'type'      =>  1,
+            ];
+        }
         //返回交易输出
-        return returnSuccess($vin);
+        return returnSuccess(['vin' => $vin, 'vout' => $vout]);
     }
 
     /**

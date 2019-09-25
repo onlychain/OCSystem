@@ -193,9 +193,6 @@ class SuperNodeProcess extends Process
      */
     public function deleteSuperNodePoolMany(array $delete_where = [])
     {
-        if(empty($delete_where)){
-            return returnError('请传入删除的条件.');
-        }
         $delete_res = $this->SuperNode->deleteMany($delete_where);
         if(!$delete_res){
             return returnError('删除失败!');

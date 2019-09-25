@@ -102,69 +102,73 @@ class TimeClockProcess extends Process
      */
     public function runTimeClock()
     {
-        while (true){
-            var_dump($this->clock);
-            if($this->clockState){
-                if($this->clock <= 0 || $this->clock == NULL){
-                    $this->clock = 125;
+//        while (true){
+//            var_dump($this->clock);
+//            if($this->clockState){
+//                if($this->clock <= 0 || $this->clock == NULL){
+//                    $this->clock = 125;
                     ++$this->rounds;
-//                    /**
-//                     * 更新备选超级节点数据
-//                     */
-//                    $examination_res = ProcessManager::getInstance()
-//                                                    ->getRpcCall(NodeProcess::class)
-//                                                    ->examinationNode();
-//                    if($examination_res['IsSuccess']){
+                    /**
+                     * 更新备选超级节点数据
+                     */
+                    $examination_res = ProcessManager::getInstance()
+                                                    ->getRpcCall(NodeProcess::class)
+                                                    ->examinationNode();
+                    if($examination_res['IsSuccess']){
 //                        continue;
-//                    }
-//                    /**
-//                     * 开始统计投票，决定下一轮的超级节点，请求不需要返回
-//                     */
-//                    $rotation_res = ProcessManager::getInstance()
-//                                                    ->getRpcCall(NodeProcess::class)
-//                                                    ->rotationSuperNode();
-//                    /**
-//                     * 更新当前节点信息
-//                     */
-//                    if($rotation_res['Data'] == 0){
-//                        //设置节点身份
-//                        ProcessManager::getInstance()
-//                                        ->getRpcCall(ConsensusProcess::class)
-//                                        ->setNodeIdentity('ordinary');
-//                        //关闭工作
-//                        ProcessManager::getInstance()
-//                                        ->getRpcCall(ConsensusProcess::class)
-//                                        ->closeConsensus();
-//                    }elseif($rotation_res['Data'] > 21){
-//                        //设置节点身份
-//                        ProcessManager::getInstance()
-//                                        ->getRpcCall(ConsensusProcess::class)
-//                                        ->setNodeIdentity('alternative');
-//                        //开启工作
-//                        ProcessManager::getInstance()
-//                                        ->getRpcCall(ConsensusProcess::class)
-//                                        ->openConsensus();
-//                    }else{
-//                        //设置节点身份
-//                        ProcessManager::getInstance()
-//                                        ->getRpcCall(ConsensusProcess::class)
-//                                        ->setNodeIdentity('core');
-//                        //开启节点
-//                        ProcessManager::getInstance()
-//                                            ->getRpcCall(ConsensusProcess::class)
-//                                            ->openConsensus();
-//                    }
-//                    //设置节点次序
-//                    ProcessManager::getInstance()
-//                                    ->getRpcCall(ConsensusProcess::class)
-//                                    ->setIndex($rotation_res['Data']);
-                }else{
-                    --$this->clock;
-                }
-            }
-            //一秒确认一次
-            sleepCoroutine(1000);
-        }
+                    }
+                    /**
+                     * 开始统计投票，决定下一轮的超级节点
+                     */
+                    $rotation_res = ProcessManager::getInstance()
+                                                    ->getRpcCall(NodeProcess::class)
+                                                    ->rotationSuperNode($this->rounds);
+                    if(empty($rotation_res['Data'])){
+//                        continue;
+                    }
+                    /**
+                     * 更新当前节点信息
+                     */
+                    if($rotation_res['Data'] == 0){
+                        //设置节点身份
+                        ProcessManager::getInstance()
+                                        ->getRpcCall(ConsensusProcess::class)
+                                        ->setNodeIdentity('ordinary');
+                        //关闭工作
+                        ProcessManager::getInstance()
+                                        ->getRpcCall(ConsensusProcess::class)
+                                        ->closeConsensus();
+                    }elseif($rotation_res['Data'] > 1){
+                        //设置节点身份
+                        ProcessManager::getInstance()
+                                        ->getRpcCall(ConsensusProcess::class)
+                                        ->setNodeIdentity('alternative');
+                        //开启工作
+                        ProcessManager::getInstance()
+                                        ->getRpcCall(ConsensusProcess::class)
+                                        ->openConsensus();
+                    }else{
+                        //设置节点身份
+                        ProcessManager::getInstance()
+                                        ->getRpcCall(ConsensusProcess::class)
+                                        ->setNodeIdentity('core');
+                        //开启节点
+                        ProcessManager::getInstance()
+                                            ->getRpcCall(ConsensusProcess::class)
+                                            ->openConsensus();
+                    }
+                    //设置节点次序
+                    ProcessManager::getInstance()
+                                    ->getRpcCall(ConsensusProcess::class)
+                                    ->setIndex($rotation_res['Data']);
+
+//                }else{
+//                    --$this->clock;
+//                }
+//            }
+//            //一秒确认一次
+//            sleepCoroutine(1000);
+//        }
     }
 
     /**

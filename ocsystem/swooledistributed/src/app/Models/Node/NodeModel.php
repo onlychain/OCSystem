@@ -65,6 +65,7 @@ class NodeModel extends Model
                         'lockTime'  => $node_data['lockTime'],
                     ],
                 ],
+                'state' =>  false,
             ];
 //            $node_data['value'] >= 3000000000000000 && $node['state'] = true;
             $node_data['value'] >= 30000000000 && $node['state'] = true;
@@ -128,6 +129,8 @@ class NodeModel extends Model
          * 质押时间必须是一年
          * 允许有10个块的误差时间
          */
+        var_dump($node_data['lockTime']);
+        var_dump($top_block_height);
         if(abs(($node_data['lockTime'] - $top_block_height - 15768000)) > 10){
             return returnError('质押时间有误');
         }

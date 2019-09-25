@@ -39,6 +39,9 @@ class TradingController extends Controller
         return $this->http_output->lists($purses);
     }
 
+    /**
+     * 生成交易接口
+     */
     public function http_createTrading()
     {
         $trading = $this->http_input->getAllPostGet();
@@ -71,9 +74,13 @@ class TradingController extends Controller
         }
         //获取交易随机值
         $noce = $this->CreateTradingModel->getNoce($trading['from'], time());
+        //赋值找零输出
+        if(!empty($vin_res['Data']['vout'])){
+            $vout_res['Data']['vout'][] = $vin_res['Data']['vout'];
+        }
         //组装
         $trading_res = [
-            'tx'          =>  $vin_res['Data'],
+            'tx'          =>  $vin_res['Data']['vin'],
             'to'          =>  $vout_res['Data']['vout'],
             'ins'         =>  '',
             'time'        =>  time(),
