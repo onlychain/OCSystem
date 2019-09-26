@@ -1,7 +1,7 @@
 # OCSystem - Blockchain underlying system
 
-[![PHP](https://img.shields.io/badge/PHP-7.3.10-blue.svg)](https://www.php.net)
-[![Swoole](https://img.shields.io/badge/Swoole-4.1.2-green.svg)](https://github.com/swoole/swoole-src/)
+[![PHP](https://img.shields.io/badge/PHP-7.1.14-blue.svg)](https://www.php.net)
+[![Swoole](https://img.shields.io/badge/Swoole-4.3.4-green.svg)](https://github.com/swoole/swoole-src/)
 [![License](https://img.shields.io/badge/License-LGPL%203.0-yellow.svg)](https://github.com/onlychain/OCSystem/blob/master/LICENSE)
 [![Open Source Love](https://badges.frapsoft.com/os/v1/open-source.png)](https://opensource.org/)
 
