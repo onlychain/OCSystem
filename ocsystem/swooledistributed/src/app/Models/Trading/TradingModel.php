@@ -152,4 +152,31 @@ class TradingModel extends Model
         }
         return returnSuccess($trading_res);
     }
+
+    /**
+     * 查询交易池中的交易
+     * @param string $tx_id
+     * @param string $noce
+     */
+    public function queryTradingPool($trading_where = [], $data = [])
+    {
+        $where = [];
+        $trading_pool = [];
+        //拼接查询条件
+        if(isset($trading_where['txId'])){
+            $where['_id'] = $trading_where['txId'];
+        }
+
+        if(isset($trading_where['noce'])){
+            $where['noce'] = $trading_where['noce'];
+        }
+
+        if(empty($where)){
+            return returnError('请输入查询条件.');
+        }
+        $trading_pool = ProcessManager::getInstance()
+                                    ->getRpcCall(TradingPoolProcess::class)
+                                    ->getTradingPoolInfo($where, $data);
+        return returnSuccess($trading_pool['Data']);
+    }
 }

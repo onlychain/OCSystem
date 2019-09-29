@@ -189,4 +189,33 @@ class CreateTradingModel extends Model
         return md5($address . $time . mt_rand(100, 999));
     }
 
+    /**
+     * 组装交易输入，需要提供相应的交易信息
+     * @param array $trading_data组装的交易数据
+     * @param int $time交易时间戳
+     */
+    public function assemblyVin($trading_data = [], $address = '')
+    {
+        if(empty($trading_data))
+            return returnError('请传入要组装的交易.');
+
+        $txids = [];//存储txId
+        $purses = [];//存储数据钱包
+        //查询交易输入数据
+        foreach ($trading_data as $td_key => $td_val){
+            $txids[] = $td_val['txId'];
+        }
+
+        $purses = $this->PurseModel->getPurse($address, $txids);
+        var_dump($purses);
+        $vin = [];//交易输出
+        foreach ($trading_data as $td_key => $td_val){
+            $vin[] = [
+                'txId'       =>  $td_val['txId'],
+                'n'          =>  $td_val['n'],
+                'scriptSig'  =>  $td_val['reqSigs'],//锁定脚本
+            ];
+        }
+        return returnSuccess($vin);
+    }
 }

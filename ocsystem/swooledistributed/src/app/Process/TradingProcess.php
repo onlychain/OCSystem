@@ -330,6 +330,7 @@ class TradingProcess extends Process
      */
     public function checkTrading($trading = [], $address = '', $type = 1)
     {
+
         //定义全局变量
         global $del_trading;
         if(empty($trading)){
@@ -373,16 +374,31 @@ class TradingProcess extends Process
         {
             //重新声明两个全局变量
             global $del_trading;
+            //处理地址以及金额
+            if($to != null){
+                $availabler_ecords['vout'][]    =  [
+                    'value'     =>  $to['value'],
+                    'type'      =>  1,
+                    'address'   =>  $to['address'],
+                ];
+                $availabler_ecords['total_cost'] += $to['value'];
+            }
+            //处理交易输入
             if($tx != null && isset($purses[$tx['txId']])){
-                var_dump($purses[$tx['txId']]['lockTime']);
+                var_dump($purses[$tx['txId']]);
                 //判断交易是否被锁定
-                if($top_block_height < $purses[$tx['txId']]['lockTime'])
-
-//                    return returnError('当前交易不可用');
+                if($type == 1){
+                    if($top_block_height < $purses[$tx['txId']]['lockTime']){
+                        return returnError('当前交易不可用');
+                    }
+                }else{
+                    if($top_block_height >= $purses[$tx['txId']]['lockTime']){
+                        return returnError('当前已被解锁');
+                    }
+                }
 
                 //存储待销毁的交易
                 $del_trading[] =  $tx['txId'];
-
                 //解锁函数
                 $check_res = $this->EncodeTrading->checkScriptSig(
                     $tx['txId'],
@@ -390,6 +406,9 @@ class TradingProcess extends Process
                     $purses[$tx['txId']]['reqSigs'],
                     $tx['scriptSig']
                 );
+//                if(!$check_res['IsSuccess'])
+//                    return returnError('交易解锁失败。');
+
                 //赋值组成vin,
                 $availabler_ecords['vin'][] = [
                     'txId'  =>  $tx['txId'],
@@ -404,21 +423,10 @@ class TradingProcess extends Process
                 }else{
                     unset($purses[$tx['txId']]);
                 }
-            }elseif ($tx != null){
-//                $purses = $this->overloadPurse()['Data'];
-            }
-            //处理地址以及金额
-            if($to != null){
-                $availabler_ecords['vout'][]    =  [
-                    'value'     =>  $to['value'],
-                    'type'      =>  1,
-                    'address'   =>  $to['address'],
-                ];
-                $availabler_ecords['total_cost'] += $to['value'];
             }
         }, $trading['vin'], $trading['vout']);
         //正常交易验证
-        if($type == 1){
+
             //判断交易金额是否充足
             if($availabler_ecords['total_val'] < $availabler_ecords['total_cost']){
                 return returnError('金额不足.', 1001);
@@ -429,6 +437,7 @@ class TradingProcess extends Process
                     'address'   =>  $address,
                 ];
             }
+        if($type == 1){
             //清理缓存
             $purses = $this->PurseModel->rushPurse($address, $purses, $del_trading);
             //存入撤回用缓存

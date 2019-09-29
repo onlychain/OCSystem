@@ -182,7 +182,7 @@ class PurseProcess extends Process
     {
         $insert_res = $this->Purse->updateOne($where, $data);
         if(!$insert_res->isAcknowledged()){
-            return returnError('插入失败!');
+            return returnError('修改失败!');
         }
         return returnSuccess();
     }
@@ -205,7 +205,6 @@ class PurseProcess extends Process
             ['$group'         =>  $group],
         ];
         //获取数据
-        var_dump($options);
         $aggregation_res = $this->Purse->aggregate($options);
         var_dump($aggregation_res);
         if(!empty($aggregation_res)){

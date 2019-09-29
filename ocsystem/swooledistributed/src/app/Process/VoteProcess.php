@@ -206,6 +206,20 @@ class VoteProcess extends Process
     }
 
     /**
+     * 修改单条数据
+     * @param array $vote
+     * @return bool
+     */
+    public function updateVote($where = [], $data = [])
+    {
+        $insert_res = $this->Vote->updateOne($where, $data, ['upsert' => true]);
+        if(!$insert_res->isAcknowledged()){
+            return returnError('修改失败!');
+        }
+        return returnSuccess();
+    }
+
+    /**
      * 进程结束函数
      * @param $process
      */

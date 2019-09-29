@@ -105,7 +105,7 @@ class TradingController extends Controller
                                         ->setLockType($trading['lockType'])
                                         ->setPrivateKey($trading['privateKey'])
                                         ->setPublicKey($trading['publicKey'])
-                                        ->encodeTrading($trading);
+                                        ->encodeTrading();
         return $this->http_output->lists($res);
     }
 
@@ -155,6 +155,15 @@ class TradingController extends Controller
                                     ->recallTrading($trading_data, $trading_data['address']);
             if(!$recall['IsSuccess']){
                 return $this->http_output->notPut('', '该交易无法重置.');
+            }
+        }else{
+            //查看交易是否已经提交过了
+            $check_where = [
+                'txId' => $decode_trading['txId'],
+            ];
+            $check_res = $this->TradingModel->queryTradingPool($check_where);
+            if(!empty($check_res['Data'])){
+                return $this->http_output->notPut('', '请勿重复提交交易.');
             }
         }
 

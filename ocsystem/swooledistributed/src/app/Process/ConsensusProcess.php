@@ -359,7 +359,7 @@ class ConsensusProcess extends Process
         $incentives = ProcessManager::getInstance()
                                     ->getRpcCall(IncentivesProcess::class)
                                     ->getIncentivesTable([],['_id' => 0])['Data'];
-        var_dump('incentives');
+           var_dump('incentives');
         $table_num = ceil($now_round / $this->yearRoundsNum);
         if(($now_round > 0) && ($now_round % $this->yearRoundsNum) == 0){
             //跨年时段，对累积字段进行规整

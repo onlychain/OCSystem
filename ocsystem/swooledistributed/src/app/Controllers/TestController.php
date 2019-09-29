@@ -141,9 +141,22 @@ class TestController extends Controller
 
     public function http_checkScriptSig()
     {
-        $private_key = hex2bin('e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'); // 假设这是自己的私钥
+        $private_key = hex2bin('6e0764700c8aaba491924dde9dabf22b6468a11750f5fc8c962afc759abee906'); // 假设这是自己的私钥
         $public_key = bin2hex(secp256k1_pubkey_create($private_key, true)); // 假设这是自己的公钥
-        $public_key_hash160 = hash('ripemd160', hash('sha256', hex2bin($public_key), true)); // 再进行base58就是钱包地址
+
+//        $public_key_hash160 = hash('ripemd160', hash('sha256', hex2bin($public_key), true)); // 再进行base58就是钱包地址
+//
+//
+//
+//        $private_key = hex2bin('6e0764700c8aaba491924dde9dabf22b6468a11750f5fc8c962afc759abee906');
+//        $public_key = '03e837b30166c858e2c7b5899330391038ee0532e5c8d10cc8448c300b8599d4d5';
+//
+
+        $public_key2 = bin2hex('1BNcXBao2m6mxsvS9NTMvNVaWQKDUYp1gY');
+        $public_key_hash160 = hash('ripemd160', hash('sha256', hex2bin($public_key2), true));
+//            bin2hex('1BNcXBao2m6mxsvS9NTMvNVaWQKDUYp1gY');
+
+        var_dump($public_key_hash160);
 
         $scriptPubKey_bytecode = script_compile("DUP HASH160 [$public_key_hash160] EQUALVERIFY CHECKSIG"); // 假设这是前一输出的脚本
         $temp_script = script_remove_codeseparator($scriptPubKey_bytecode); // 移除脚本中所有OP_CODESEPARATOR
@@ -154,15 +167,7 @@ class TestController extends Controller
 
         $scriptSig_bytecode = script_compile("[$signature] [$public_key]"); // 得到输入脚本，并写到对应的输入上
 
-//        var_dump(bin2hex($temp_script));
-        var_dump(bin2hex($temp_script));
-//        var_dump(script_decompile($scriptPubKey_bytecode));
-        var_dump(hex2bin($raw_tx));
-        var_dump(bin2hex($msg));
-        var_dump(bin2hex($scriptSig_bytecode));
-//
-//        var_dump("=====================");
-//        var_dump(script_compile("DUP HASH160 [$public_key_hash160] EQUALVERIFY CHECKSIG"));
+
         // ======验证过程======
         $ctx = script_create_context();
         script_set_checksig_callback($ctx, function($subscript) {

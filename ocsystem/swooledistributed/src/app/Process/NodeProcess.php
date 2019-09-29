@@ -239,7 +239,7 @@ class NodeProcess extends Process
         }
         foreach ($vote_res['Data'] as $vr_key => $vr_val){
             //组装各节点前1000名用户投票数据
-            $incentive_users[$vr_val['address']][] = [
+            $incentive_users[$vr_val['address']] = [
                 'address'   => $vr_val['address'],
                 'value'     => $vr_val['value'],
             ];
@@ -247,8 +247,6 @@ class NodeProcess extends Process
             $new_super_node[$vr_val['address']]['value'] += floor($vr_val['value'] * 0.6);
         }
         //对值进行排序
-        arsort($new_super_node);
-        var_dump($new_super_node);
         //获取前30个节点
         $new_super_node = array_slice($new_super_node, 0, 30);
         //执行节点健康检查函数

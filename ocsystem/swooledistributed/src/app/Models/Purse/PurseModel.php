@@ -172,8 +172,8 @@ class PurseModel extends Model
                             ->getRpcCall(PurseProcess::class)
                             ->insertPurse(['_id' => $address, 'trading' => $trading]);
         }else{
-//            $data = ['$push' => ['trading' => $trading]];
-            $data = ['$inc' => ['trading' => $trading]];
+            $data = ['$push' => ['trading' => $trading]];
+//            $data = ['$inc' => ['trading' => $trading]];
             $where = ['_id' => $address];
             ProcessManager::getInstance()
                         ->getRpcCall(PurseProcess::class)
@@ -252,10 +252,14 @@ class PurseModel extends Model
     {
         $purse_table = CatCacheRpcProxy::getRpc()->offsetGet($this->IndexCacheName);
         //如果缓存达到上限，或没有当前钱包直接返回
-        if(count($purse_table) >= $this->LimitLens || empty($purse_table[$address]))    return;
+        if(count($purse_table) >= $this->LimitLens || empty($purse_table[$address]))
+            return;
+
         //获取当前钱包并刷新
         $purse = CatCacheRpcProxy::getRpc()->offsetGet($this->PurseCacheName . $address);
-        if(count($purse) >= $this->TradingLens) return;
+        if(count($purse) >= $this->TradingLens)
+            return;
+
         $trading = [];
         if(!empty($trading)){
             //如果有传入交易内容
@@ -396,6 +400,7 @@ class PurseModel extends Model
 //        }
         //把新交易从数据库中删除
         $where = ['address' => $address, 'txId' => ['$in' => $trading]];
+        var_dump($where);
 //        $data = ['$pull' => ['txId' => ['$in' => $txId]]];
         $aaa = ProcessManager::getInstance()
                                 ->getRpcCall(PurseProcess::class)
@@ -448,7 +453,7 @@ class PurseModel extends Model
         $pagesize = $this->TradingLens;
         if(!empty($txids)){
             $purse_where['txId'] = ['$in' => $txids];
-            $pagesize = count($trading);
+            $pagesize = count($trading) + 10;
         }
         $new_purse = $this->getPurseFromMongoDb($purse_where, $purse_data, 1, $pagesize);
 

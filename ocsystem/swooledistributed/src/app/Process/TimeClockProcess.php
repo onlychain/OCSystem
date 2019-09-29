@@ -102,6 +102,7 @@ class TimeClockProcess extends Process
      */
     public function runTimeClock()
     {
+
 //        while (true){
 //            var_dump($this->clock);
 //            if($this->clockState){

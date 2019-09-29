@@ -260,7 +260,7 @@ class TradingPoolProcess extends Process
         $old_trading = $this->EncodeTrading->decodeTrading($old_trading['Data']['trading']);
         //删除该交易
         $del_where = [
-            '_id'   => bin2hex(hash('sha256', hash('sha256', hex2bin($recall_trading['trading']), true), true)),
+            '_id'   =>  bin2hex(hash('sha256', hash('sha256', hex2bin($recall_trading['trading']), true), true)),
             'noce'  =>  $recall_trading['renoce'],
         ];
         $del_trading = $this->deleteTradingPool($del_where);
