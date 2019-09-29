@@ -22,15 +22,39 @@ use Server\Components\CatCache\CatCacheRpcProxy;
 
 class NodeController extends Controller
 {
-    protected $TradingModel;//交易处理模型
-    protected $TradingEncodeModel;//交易序列化模型
-    protected $NodeModel;//交易序列化模型
+    /**
+     * 验签函数
+     * @var
+     */
+    protected $Validation;
+
+    /**
+     * 交易处理模型
+     * @var
+     */
+    protected $TradingModel;
+
+    /**
+     * 交易序列化模型
+     * @var
+     */
+    protected $TradingEncodeModel;
+
+    /**
+     * 交易序列化模型
+     * @var
+     */
+    protected $NodeModel;
     protected function initialization($controller_name, $method_name)
     {
         parent::initialization($controller_name, $method_name);
+        //实例化验签模型
         $this->Validation = $this->loader->model('Trading/ValidationModel', $this);
+        //实例化交易模型
         $this->TradingModel = $this->loader->model('Trading/TradingModel', $this);
+        //实例化交易序列化模型
         $this->TradingEncodeModel = $this->loader->model('Trading/TradingEncodeModel', $this);
+        //实例化节点模型
         $this->NodeModel = $this->loader->model('Node/NodeModel', $this);
     }
 

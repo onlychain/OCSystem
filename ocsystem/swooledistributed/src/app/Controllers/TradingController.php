@@ -16,17 +16,47 @@ use Server\Components\CatCache\CatCacheRpcProxy;
 
 class TradingController extends Controller
 {
-    protected $Validation;//交易验证模型
-    protected $TradingModel;//交易处理模型
-    protected $CreateTradingModel;//生成交易模型
-    protected $TradingEncodeModel;//交易序列化模型
+    /**
+     * 交易验证模型
+     * @var
+     */
+    protected $Validation;
+
+    /**
+     * 区块模型
+     * @var
+     */
+    protected $BlockModel;
+
+    /**
+     * 交易处理模型
+     * @var
+     */
+    protected $TradingModel;
+
+    /**
+     * 生成交易模型
+     * @var
+     */
+    protected $CreateTradingModel;
+
+    /**
+     * 交易序列化模型
+     * @var
+     */
+    protected $TradingEncodeModel;
     protected function initialization($controller_name, $method_name)
     {
         parent::initialization($controller_name, $method_name);
+        //调用验证模型
         $this->Validation = $this->loader->model('Trading/ValidationModel', $this);
+        //调用交易模型
         $this->TradingModel = $this->loader->model('Trading/TradingModel', $this);
+        //调用区块模型
         $this->BlockModel = $this->loader->model('Block/BlockBaseModel', $this);
+        //调用创建交易模型
         $this->CreateTradingModel = $this->loader->model('Trading/CreateTradingModel', $this);
+        //调用交易序列化模型
         $this->TradingEncodeModel = $this->loader->model('Trading/TradingEncodeModel', $this);
     }
 

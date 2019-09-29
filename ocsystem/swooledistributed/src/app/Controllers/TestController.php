@@ -144,17 +144,9 @@ class TestController extends Controller
         $private_key = hex2bin('6e0764700c8aaba491924dde9dabf22b6468a11750f5fc8c962afc759abee906'); // 假设这是自己的私钥
         $public_key = bin2hex(secp256k1_pubkey_create($private_key, true)); // 假设这是自己的公钥
 
-//        $public_key_hash160 = hash('ripemd160', hash('sha256', hex2bin($public_key), true)); // 再进行base58就是钱包地址
-//
-//
-//
-//        $private_key = hex2bin('6e0764700c8aaba491924dde9dabf22b6468a11750f5fc8c962afc759abee906');
-//        $public_key = '03e837b30166c858e2c7b5899330391038ee0532e5c8d10cc8448c300b8599d4d5';
-//
+        $public_key_hash160 = hash('ripemd160', hash('sha256', hex2bin($public_key), true)); // 再进行base58就是钱包地址
 
-        $public_key2 = bin2hex('1BNcXBao2m6mxsvS9NTMvNVaWQKDUYp1gY');
-        $public_key_hash160 = hash('ripemd160', hash('sha256', hex2bin($public_key2), true));
-//            bin2hex('1BNcXBao2m6mxsvS9NTMvNVaWQKDUYp1gY');
+
 
         var_dump($public_key_hash160);
 

@@ -18,16 +18,39 @@ use Server\Components\CatCache\CatCacheRpcProxy;
 
 class VoteController extends Controller
 {
-    protected $TradingModel;//交易处理模型
-    protected $TradingEncodeModel;//交易序列化模型
-    protected $VoteModel;//交易序列化模型
-    protected $CreateTradingModel;//组装交易模型
+    /**
+     * 交易处理模型
+     * @var
+     */
+    protected $TradingModel;
+
+    /**
+     * 交易序列化模型
+     * @var
+     */
+    protected $TradingEncodeModel;
+
+    /**
+     * 交易序列化模型
+     * @var
+     */
+    protected $VoteModel;
+
+    /**
+     * 组装交易模型
+     * @var
+     */
+    protected $CreateTradingModel;
     protected function initialization($controller_name, $method_name)
     {
         parent::initialization($controller_name, $method_name);
+        //调用交易模型
         $this->TradingModel = $this->loader->model('Trading/TradingModel', $this);
+        //调用交易序列化模型
         $this->TradingEncodeModel = $this->loader->model('Trading/TradingEncodeModel', $this);
+        //调用投票模型
         $this->VoteModel = $this->loader->model('Node/VoteModel', $this);
+        //调用生成交易模型
         $this->CreateTradingModel = $this->loader->model('Trading/CreateTradingModel', $this);
     }
 
@@ -129,7 +152,6 @@ class VoteController extends Controller
                                                 ->setPublicKey($vote_data['publicKey'])
                                                 ->encodeTrading();
         return $this->http_output->lists($vote_trading);
-
     }
 
 }
