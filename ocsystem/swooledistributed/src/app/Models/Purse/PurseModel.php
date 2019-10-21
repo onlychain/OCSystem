@@ -492,7 +492,7 @@ class PurseModel extends Model
     protected function checkTradingExpire($trading = [])
     {
         $time = time();
-        $is_expire = $trading['time'] + $this->TimeOut < $time;
+        $is_expire = intval($trading['time']) + $this->TimeOut < $time;
         if ($is_expire) return false;
 
         return true;
@@ -544,9 +544,13 @@ class PurseModel extends Model
             return returnError();
         }
         $time = time();
-        foreach ($purse as $p_key => &$p_val){
+        foreach ($purse as $p_key => $p_val){
+            if(!isset($p_val['time'])){
+                unset($purse[$p_key]);
+                continue;
+            }
             if($p_val['time'] + $this->TimeOut < $time){
-                unset($p_val);
+                unset($purse[$p_key]);
             }
         }
         if(count($purse) >= $this->TradingLens){

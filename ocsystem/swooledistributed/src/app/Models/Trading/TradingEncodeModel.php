@@ -135,18 +135,15 @@ class TradingEncodeModel extends Model
         if(!empty($this->vout)){
             foreach ($this->vout as $vout_key => $vout_val){
                 //拼接交易金额,最小粒度为亿分之一，称为一个汤圆
-                $encode_vout_str .= str_pad(dechex(abs($vout_val['value']) * 100000000), 16, '0', STR_PAD_LEFT);
+                $encode_vout_str .= str_pad(dechex(abs($vout_val['value'])), 16, '0', STR_PAD_LEFT);
                 //处理锁定脚本，目前只支持一种序列化形式
-                $public_key = '';
-//                $public_key_hash160 = hash('ripemd160', hash('sha256', hex2bin($this->getPublicKey()), true));
-
                 $public_key_hash160 = $vout_val['address'];
                 switch($vout_val['type']){
                     case 1 ://使用HASH160交易
-                        $public_key = bin2hex(script_compile('DUP HASH160 ['.bin2hex($public_key_hash160).'] EQUALVERIFY CHECKSIG'));
+                        $public_key = bin2hex(script_compile('DUP HASH160 ['.$public_key_hash160.'] EQUALVERIFY CHECKSIG'));
                         break;
                     default :
-                        $public_key = bin2hex(script_compile('DUP HASH160 ['.bin2hex($public_key_hash160).'] EQUALVERIFY CHECKSIG'));
+                        $public_key = bin2hex(script_compile('DUP HASH160 ['.$public_key_hash160.'] EQUALVERIFY CHECKSIG'));
                         break;
                 }
                 //计算锁定脚本长度，最长为2个字节
@@ -165,7 +162,7 @@ class TradingEncodeModel extends Model
                 //交易txId默认全为0
                 $encode_vin_str .= '0000000000000000000000000000000000000000000000000000000000000000';
                 //交易索引为2个字节，默认都是1
-                $encode_vin_str .= '11';
+                $encode_vin_str .= dechex(255);
                 //计算内容大小
                 $script_hex = bin2hex($vin_val['coinbase']);
                 //脚本内容或自定义内容不准大于2个字节
@@ -175,16 +172,13 @@ class TradingEncodeModel extends Model
             }else{
                 $script_temp = '';//临时存储解锁脚本
                 //如果是正常的交易引入
-//                $temp_vin .= $encode_vin_str.= $vin_val['txId'];
                 $encode_vin_str.= $vin_val['txId'];
                 //加入序列
-//                $temp_vin .= $encode_vin_str.= str_pad(dechex($vin_val['n']), 4, '0', STR_PAD_LEFT);
                 $encode_vin_str.= str_pad(dechex($vin_val['n']), 2, '0', STR_PAD_LEFT);
                 //生成解锁脚本
                 //1：去除锁定脚本内的脚本代码
-                $script_remove = bin2hex(script_remove_codeseparator($vin_val['scriptSig']));
+                $script_remove = bin2hex(script_remove_codeseparator(hex2bin($vin_val['scriptSig'])));
                 //拼接序列化交易(修改序列化规则方便校验)
-//                $scrializa_trading = $encode_head_str . $temp_vin. $encode_vout_str. $encode_end_str;
                 $scrializa_trading = $vin_val['txId'] . str_pad(dechex($vin_val['n']), 2, '0', STR_PAD_LEFT) . $script_remove;
                 //把过滤后的脚本拼接到序列化的交易单中，并执行2次哈希
                 $trading_msg = hash('sha256', hash('sha256', hex2bin($scrializa_trading), true), true);
@@ -224,7 +218,7 @@ class TradingEncodeModel extends Model
                 //为coinbase交易
                 //索引递进64个字符
                 $str_index += 64;
-                $decode_trading['vin'][$count_vin]['n'] = substr($trading, $str_index, 2);
+                $decode_trading['vin'][$count_vin]['n'] = hexdec(substr($trading, $str_index, 2));
                 //索引递进4个字符
                 $str_index += 2;
                 //获取coinbase内容长度
@@ -232,7 +226,7 @@ class TradingEncodeModel extends Model
                 //索引递进4个字符
                 $str_index += 4;
                 //获取coinbase内容
-                $decode_trading['vin'][$count_vin]['conbase'] = hex2bin(substr($trading, $str_index, $script_len));
+                $decode_trading['vin'][$count_vin]['coinbase'] = hex2bin(substr($trading, $str_index, $script_len));
                 //索引递进
                 $str_index += $script_len;
             }else{
@@ -258,7 +252,7 @@ class TradingEncodeModel extends Model
         $str_index += 2;
         for($count_vout = 0; $count_vout < $vout_num; ++$count_vout){
             //交易金额
-            $decode_trading['vout'][$count_vout]['value'] = abs(hexdec(substr($trading, $str_index, 16))) / 100000000;
+            $decode_trading['vout'][$count_vout]['value'] = abs(hexdec(substr($trading, $str_index, 16)));
             //索引递进16个字符
             $str_index += 16;
             //第几个交易输出
@@ -273,7 +267,7 @@ class TradingEncodeModel extends Model
             $str_index += $unlock_len;
             //拼上地址
             preg_match_all("/(?:\[)(.*)(?:\])/i", script_decompile(hex2bin($decode_trading['vout'][$count_vout]['reqSigs'])), $address);
-            $decode_trading['vout'][$count_vout]['address'] = hex2bin($address[1][0]);
+            $decode_trading['vout'][$count_vout]['address'] = $address[1][0];
         }
         //解析交易时间
         $decode_trading['time'] = hexdec(substr($trading, $str_index, 8));
@@ -487,9 +481,6 @@ class TradingEncodeModel extends Model
      */
     public function checkScriptSig($tx_id = '', $n = '',$script_sig = '', $script_pub_key = '')
     {
-
-        var_dump($script_sig);
-        var_dump($script_pub_key);
         if($tx_id == ''){
             return returnError('请输入引用的交易!');
         }
@@ -502,21 +493,18 @@ class TradingEncodeModel extends Model
         if($script_pub_key == ''){
             return returnError('请输入引用的解锁脚本!');
         }
-        $subscript = bin2hex(script_remove_codeseparator($script_sig));
         $ctx = script_create_context();
-
-
-        script_set_checksig_callback($ctx, function($tx_id, $n, $subscript) {
+        script_set_checksig_callback($ctx, function($subscript) use ($tx_id, $n){
             // 序列化结果应该和签名过程一样，否则验证失败
-            $raw_tx = $tx_id . str_pad(dechex($n), 4, '0', STR_PAD_LEFT) . $subscript;
-            $msg = hash('sha256', hash('sha256', hex2bin($raw_tx), true), true);
-            return $msg; // OP_CHECKSIG需要这个消息才能工作，因为内部调用了secp256k1_verify($public_key, $msg, $signature)
+            $scrializa_trading = $tx_id .str_pad(dechex($n), 2, '0', STR_PAD_LEFT) . bin2hex($subscript);
+            //把过滤后的脚本拼接到序列化的交易单中，并执行2次哈希
+            $msg = hash('sha256', hash('sha256', hex2bin($scrializa_trading), true), true);
+            return $msg;
         });
-        var_dump(33333);
         // 所有的script_eval不能失败，并且script_verify为true才算验证通过
-        if (!script_eval($ctx, $script_pub_key)) return returnError('锁定脚本验证失败!');
-        if (!script_eval($ctx, $script_sig)) return returnError('解锁脚本验证失败!');
-        if (!script_verify($ctx)) return returnError('交易验证失败!');
+        if (!script_eval($ctx, hex2bin($script_pub_key))) return returnError('解锁脚本验证失败!');
+        if (!script_eval($ctx, hex2bin($script_sig))) return returnError('锁定脚本验证失败');
+        if (!script_verify($ctx)) return returnError('交易验证失败3!');
         return returnSuccess();
     }
 
@@ -553,13 +541,13 @@ class TradingEncodeModel extends Model
         $this->vinNum = '';
         $this->vout = array();
         $this->voutNum = '';
-        $this->ins = '';
-        $this->time = "";
+        $this->ins = '00';
+        $this->time = "00000000";
         $this->hex = "";
         $this->blockHash = "";
         $this->blockNumber = 0;
         $this->version = 1;
-        $this->lockTime = '';
+        $this->lockTime = '00000000';
         $this->privateKey = '';
         $this->publicKey = '';
         $this->lockType = '01';

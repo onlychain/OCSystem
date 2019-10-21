@@ -17,13 +17,13 @@
  */
 $config['timerTask'] = [];
 
-//$config['timerTask'][0] = [
-//    'model_name'    => 'Index/IndexModel',
-//    'method_name'   => 'index',
-//    'interval_time' => 1,
-//    'max_exec'      => 1,
-//    'delay'         => true,
-//];
+$config['timerTask'][0] = [
+    'model_name'    => 'Index/IndexModel',
+    'method_name'   => 'index',
+    'interval_time' => 1,
+    'max_exec'      => 1,
+    'delay'         => true,
+];
 
 //$config['timerTask'][1] = [
 //    'model_name'    => 'Index/IndexModel',

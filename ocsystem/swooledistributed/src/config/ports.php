@@ -17,6 +17,17 @@ $config['ports'][] = [
     'middlewares' => ['MonitorMiddleware'],
     'method_prefix' => 'tcp_',
 ];
+
+$config['ports'][] = [
+    'socket_type' => PortManager::SOCK_TCP,
+    'socket_name' => '0.0.0.0',
+    'socket_port' => 9000,
+    'pack_tool' => 'LenJsonPack',
+    'route_tool' => 'SuperRoute',
+    'middlewares' => ['MonitorMiddleware'],
+    'method_prefix' => 'tcp_',
+];
+
 //溯源api端
 $config['ports'][] = [
     'socket_type' => PortManager::SOCK_HTTP,

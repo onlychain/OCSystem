@@ -207,7 +207,6 @@ class CreateTradingModel extends Model
         }
 
         $purses = $this->PurseModel->getPurse($address, $txids);
-        var_dump($purses);
         $vin = [];//交易输出
         foreach ($trading_data as $td_key => $td_val){
             $vin[] = [

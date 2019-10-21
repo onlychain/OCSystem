@@ -265,6 +265,6 @@ class IncentivesProcess extends Process
      */
     public function onShutDown()
     {
-        echo "交易进程关闭.";
+        echo "激励进程关闭.";
     }
 }

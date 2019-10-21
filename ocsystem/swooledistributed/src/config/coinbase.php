@@ -6,25 +6,91 @@
  * Time: 下午4:07
  */
 $config['coinbase'] = [
-    'privateKey'    =>  '008e9ae3d432ec2ef04828229f95ecdacf45144fa042560435a9cc0f6d9103b6',
-    'publicKey'     =>  '03cc3b20704aa730d643a8d3ec329a40f40d9a82b434ec684e2e03d86006185ce3',
-    'txId'  => '',
-    'lockTime' => 0,
-    'vin' => [
-        0   =>  [
-            'coinbase' => 'No one breather who is worthier.',
-            'sequence' => 0
+    [
+        'ip'    =>  '120.79.242.5',
+        'port'  =>  '9000',
+        "tx" => [
+            [
+                "n"=> 255,
+                "coinbase"=> "No one breather who is worthier."
+            ]
         ],
-    ],
-    'vout' => [
-        0   =>  [
-            'value' => 52000000000,
-            'type' => '1',
-//            'address' => '0x552204a2A68A43E17523B44aEE190B76eD583C61'
-            'address' => '1muH6KmEJv6tnWaY7h6ZrWUi5vdVrrfzp'
+        "to"=> [
+            [
+                "address"=> "c610fb6d667856b729fbe8cff851bc791dcb8f16",
+                "value"=> 28750000000000000,
+                "type"=> 1
+            ],
+
         ],
+        "ins"=> "",
+        "time"=> 1496246400,
+        "lockTime"=> 0,
+        "lockType"=> 3
     ],
-    'ins'   =>  '',
-    'time' => 0
+    [
+        'ip'    =>  '120.79.71.102',
+        'port'  =>  '9000',
+        "tx" => [
+            [
+                "n"=> 255,
+                "coinbase"=> "No one breather who is worthier."
+            ]
+        ],
+        "to"=> [
+            [
+                "address"=> "0d939dafac7caa02744c1fbae75bd755349dbd30",
+                "value"=> 28750000000000000,
+                "type"=> 1
+            ],
+
+        ],
+        "ins"=> "",
+        "time"=> 1496246400,
+        "lockTime"=> 0,
+        "lockType"=> 3
+    ],
+    [
+        'ip'    =>  '47.104.96.160',
+        'port'  =>  '9000',
+        "tx" => [
+            [
+                "n"=> 255,
+                "coinbase"=> "No one breather who is worthier."
+            ]
+        ],
+        "to"=> [
+            [
+                "address"=> "bb6405cdfe38764d51d801afc174ea11d3db00d8",
+                "value"=> 28750000000000000,
+                "type"=> 1
+            ],
+
+        ],
+        "ins"=> "",
+        "time"=> 1496246400,
+        "lockTime"=> 0,
+        "lockType"=> 3
+    ],
+    [
+        "tx" => [
+            [
+                "n"=> 255,
+                "coinbase"=> "No one breather who is worthier."
+            ]
+        ],
+        "to"=> [
+            [
+                "address"=> "cd639ef9bb4d0cd0bfc506278a48bb9f898d037f",
+                "value"=> 28750000000000000,
+                "type"=> 1
+            ],
+
+        ],
+        "ins"=> "",
+        "time"=> 1496246400,
+        "lockTime"=> 0,
+        "lockType"=> 1
+    ]
 ];
 return $config;

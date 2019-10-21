@@ -9,8 +9,8 @@
 /**
  * 服务器设置
  */
-$config['name'] = 'weecot';
-$config['address'] = '1muH6KmEJv6tnWaY7h6ZrWUi5vdVrrfzp';
+$config['name'] = 'weecot3';
+$config['address'] = 'c610fb6d667856b729fbe8cff851bc791dcb8f16';//1muH6KmEJv6tnWaY7h6ZrWUi5vdVrrfzp  fb9d615e334d11787ae06265ed6d90ddf1a894e7
 $config['node']["ip"] = '120.79.242.5';
 $config['server']['send_use_task_num'] = 500;
 $config['server']['set'] = [
