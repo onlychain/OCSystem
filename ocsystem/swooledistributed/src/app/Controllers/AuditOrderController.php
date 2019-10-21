@@ -45,19 +45,28 @@ class AuditOrderController extends Controller
         $address_type = $this->http_input->getAllPostGet() ?? 1;
         //生成私钥
         $this->bitcoinECDSA->generateRandomPrivateKey();
-        //获取公钥
-        $publick = $this->bitcoinECDSA->getPubKey();
+
         //获取私钥
         $privatek = $this->bitcoinECDSA->getPrivateKey();
 
+        $address_type['addressType'] = $address_type['addressType'] ?? 2;
         //生成地址
         $address = '';
         switch ($address_type['addressType']){
-            case 1 : $address = $this->bitcoinECDSA->getAddress();
-                    break;
-            case 2 : $address = hash('ripemd160', hash('sha256', hex2bin($publick), true));;
+            case 1 :
+                $address = $this->bitcoinECDSA->getAddress();
+                //获取公钥
+                $publick = $this->bitcoinECDSA->getPubKey();
                 break;
-            default : $address = hash('ripemd160', hash('sha256', hex2bin($publick), true));;
+            case 2 :
+                //获取公钥
+                $publick = bin2hex(secp256k1_pubkey_create(hex2bin($privatek), true));
+                $address = hash('ripemd160', hash('sha256', hex2bin($publick), true));;
+                break;
+            default :
+                //获取公钥
+                $publick = bin2hex(secp256k1_pubkey_create(hex2bin($privatek), true));
+                $address = hash('ripemd160', hash('sha256', hex2bin($publick), true));;
                 break;
         }
 
@@ -70,6 +79,8 @@ class AuditOrderController extends Controller
         ];
         return $this->http_output->lists($res);
     }
+
+
 
     /**
      * 生成数据验签

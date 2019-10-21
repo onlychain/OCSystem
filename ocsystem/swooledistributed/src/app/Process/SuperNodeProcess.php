@@ -132,7 +132,6 @@ class SuperNodeProcess extends Process
         return returnSuccess(['id' => $insert_res->getInsertedId()->__toString()]);
     }
 
-
     /**
      * 插入单条数据
      * @param array $vote
@@ -206,6 +205,6 @@ class SuperNodeProcess extends Process
      */
     public function onShutDown()
     {
-        echo "交易进程关闭.";
+        echo "超级节点进程关闭.";
     }
 }

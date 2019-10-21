@@ -133,7 +133,6 @@ class NodeProcess extends Process
         return returnSuccess();
     }
 
-
     /**
      * 插入单条数据
      * @param array $vote
@@ -211,20 +210,23 @@ class NodeProcess extends Process
     {
         //获取此轮参与投票的节点数
         $nodes = [];//存储参与竞选的节点
+        $del_res = [];//删除超级节点结果
         $super_nodes = [];//超级节点
         $node_rounds = 0;//当前节点所在顺位顺序
         $new_super_node = [];//新的超级节点
         $node_where = ['state' => true];//查询条件
-        $node_data = ['address' => 1, '_id' => 0, 'pledge' => 1];//查询字段
+        $node_data = ['ip' => 1, 'port' => 1, 'address' => 1, '_id' => 0, 'pledge' => 1];//查询字段
         $nodes = $this->getNodeList($node_where, $node_data);
         if(count($nodes['Data']) < 1){
             //少于21个节点参选，不进行统计
             return returnError();
         }
-        foreach ($nodes['Data'] as $nd_val => $nd_key){
-            $super_nodes[] = $nd_key['address'];
+        foreach ($nodes['Data'] as $nd_key => $nd_val){
+            $super_nodes[] = $nd_val['address'];
+            $new_super_node[$nd_val['address']]['ip'] = $nd_val['ip'];
+            $new_super_node[$nd_val['address']]['port'] = $nd_val['port'];
             //取质押的40%
-            $new_super_node[$nd_key['address']]['value'] = floor(array_sum(array_column($nd_key['pledge'], 'value')) * 0.4);
+            $new_super_node[$nd_val['address']]['value'] = floor(array_sum(array_column($nd_val['pledge'], 'value')) * 0.4);
         }
         //先获取下一轮的投票结果,先设定获取一百万条数据
         $incentive_users = [];//可以享受激励的一千个用户地址
@@ -232,20 +234,20 @@ class NodeProcess extends Process
         $vote_sort = ['value' => -1];
         $vote_res = ProcessManager::getInstance()
                                     ->getRpcCall(VoteProcess::class)
-                                    ->getVoteList($vote_where, [], 1, 1000000);
-        if(empty($vote_res['Data'])){
-            //没有投票数据，不再执行
-            return;
+                                    ->getVoteList($vote_where, [], 1, 1000000, $vote_sort);
+        if(!empty($vote_res['Data'])){
+            //有投票数据
+            foreach ($vote_res['Data'] as $vr_key => $vr_val){
+                //组装各节点所有用户投票数据
+                $incentive_users[$vr_val['address']] = [
+                    'address'   => $vr_val['address'],
+                    'value'     => number_format($vr_val['value'], 0, '', ''),
+                ];
+                //取投票的百分之六十
+                $new_super_node[$vr_val['address']]['value'] += floor($vr_val['value'] * 0.6);
+            }
         }
-        foreach ($vote_res['Data'] as $vr_key => $vr_val){
-            //组装各节点前1000名用户投票数据
-            $incentive_users[$vr_val['address']] = [
-                'address'   => $vr_val['address'],
-                'value'     => $vr_val['value'],
-            ];
-            //取投票的百分之六十
-            $new_super_node[$vr_val['address']]['value'] += floor($vr_val['value'] * 0.6);
-        }
+
         //对值进行排序
         //获取前30个节点
         $new_super_node = array_slice($new_super_node, 0, 30);
@@ -257,19 +259,23 @@ class NodeProcess extends Process
             }
             $new_super_node[$nsn_key]['voters'] = $incentive_users[$nsn_key] ?? [];
             $new_super_node[$nsn_key]['address'] = $nsn_key;
+            $new_super_node[$nsn_key]['value'] = number_format($new_super_node[$nsn_key]['value'], 0, '', '');
             ++$count;
         }
         sort($new_super_node);
         //先删除超级节点数据
-        ProcessManager::getInstance()
+        $del_res = ProcessManager::getInstance()
                         ->getRpcCall(SuperNodeProcess::class)
                         ->deleteSuperNodePoolMany();
-        var_dump(123);
+        if(!$del_res['IsSuccess']){
+            return returnError('删除旧数据失败!');
+        }
         //插入新的超级节点数据
         ProcessManager::getInstance()
                         ->getRpcCall(SuperNodeProcess::class)
                         ->insertSuperNodeMany($new_super_node);
 
+        var_dump('over2');
         return returnSuccess($node_rounds);
     }
 
@@ -291,7 +297,6 @@ class NodeProcess extends Process
                                         ->getTopBlockHeight();
         $block_height += 63;
         foreach ($all_node['Data'] as $an_key => &$an_val){
-
             $count_val = 0;//存储累积的
             if(empty($an_val['pledge'])){
                 //没有质押则删除该节点
@@ -309,13 +314,14 @@ class NodeProcess extends Process
                 //未过期收集质押金额，判断是否还有资格参与超级节点精选
                 $count_val += $av_val['value'];
             }
-//            $an_val['state'] = $count_val >= 3000000000000000 ? true : false;
-            $an_val['state'] = $count_val >= 30000 ? true : false;
+            $an_val['state'] = $count_val >= 3000000000000000 ? true : false;
+//            $an_val['state'] = $count_val >= 30000 ? true : false;
         }
         //删除旧节点数据
         $this->deleteNodePoolMany([]);
         //把更新后的超级节点数据存入数据库
         $this->insertNodeMany($all_node['Data']);
+        var_dump('over');
         return returnSuccess();
     }
     /**
@@ -324,6 +330,6 @@ class NodeProcess extends Process
      */
     public function onShutDown()
     {
-        echo "交易进程关闭.";
+        echo "节点进程关闭.";
     }
 }

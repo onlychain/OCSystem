@@ -7,6 +7,7 @@ use Server\Asyn\TcpClient\SdTcpRpcPool;
 use Server\CoreBase\SwooleException;
 use MongoDB;
 //自定义进程
+use app\Process\PeerProcess;
 use app\Process\TradingProcess;
 use app\Process\BlockProcess;
 use app\Process\TradingPoolProcess;
@@ -55,9 +56,9 @@ class VoteController extends Controller
     }
 
     /**
-     * 投票接口
+     * 投票接口1
      */
-    public function http_vote()
+    public function http_vote1()
     {
         $vote_data = $this->http_input->getAllPostGet();
         if(empty($vote_data)){
@@ -115,6 +116,8 @@ class VoteController extends Controller
                 return $this->http_output->notPut('', $trading_res['Message']);
             }
         }
+        //验证后再进行广播，防止垃圾信息污染网络
+        p2p_broadcast(json_encode(['broadcastType' => 'Vote', 'Data' => $vote_data]));
         //交易验证成功，投票写入数据库
         $check_vote['address'] = $vote_data['address'];
         //重置序号
@@ -124,6 +127,26 @@ class VoteController extends Controller
         if(!$vote_res['IsSuccess']){
             return $this->http_output->notPut('', $vote_res['Message']);
         }
+        return $this->http_output->yesPut();
+    }
+
+    /**
+     * 投票接口
+     */
+    public function http_vote()
+    {
+        $vote_data = $this->http_input->getAllPostGet();
+        if(empty($vote_data)){
+            return $this->http_output->notPut(1004);
+        }
+        $res = $this->VoteModel->checkVoteRequest($vote_data);
+        if(!$res['IsSuccess']){
+            return $this->http_output->notPut($res['Code'], $res['Message']);
+        }
+        //验证后再进行广播，防止垃圾信息污染网络
+        ProcessManager::getInstance()
+                    ->getRpcCall(PeerProcess::class, true)
+                    ->broadcast(json_encode(['broadcastType' => 'Vote', 'Data' => $vote_data]));
         return $this->http_output->yesPut();
     }
 

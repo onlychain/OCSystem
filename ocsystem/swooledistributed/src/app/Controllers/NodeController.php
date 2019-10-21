@@ -8,6 +8,7 @@ use Server\CoreBase\SwooleException;
 use MongoDB;
 //自定义进程
 
+use app\Process\PeerProcess;
 use app\Process\VoteProcess;
 use app\Process\NodeProcess;
 use app\Process\BlockProcess;
@@ -59,9 +60,9 @@ class NodeController extends Controller
     }
 
     /**
-     * 质押接口
+     * 质押接口1
      */
-    public function http_campaign()
+    public function http_campaign1()
     {
         $node_data = $this->http_input->getAllPostGet();
         if(empty($node_data)){
@@ -99,12 +100,12 @@ class NodeController extends Controller
         if(!$check_trading_res['IsSuccess']){
             return $this->http_output->notPut($check_trading_res['Code'], $check_trading_res['Message']);
         }
-
         //交易入库
         $trading_res = $this->TradingModel->createTradingEecode($node_data['pledge']);
         if(!$trading_res['IsSuccess']){
             return $this->http_output->notPut('', $trading_res['Message']);
         }
+
         //交易验证成功，投票写入数据库
         $check_node['address'] = $node_data['address'];
         $check_node['txId'] = $decode_trading['txId'];
@@ -112,7 +113,27 @@ class NodeController extends Controller
         if(!$node_res['IsSuccess']){
             return $this->http_output->notPut('', $node_res['Message']);
         }
+//        p2p_broadcast(json_encode(['broadcastType' => 'Pledge', 'Data' => $node_data]));
         return $this->http_output->yesPut();
+    }
+
+    /**
+     * 质押接口
+     */
+    public function http_campaign()
+    {
+        $node_data = $this->http_input->getAllPostGet();
+        if(empty($node_data)){
+            return $this->http_output->notPut(1004);
+        }
+        $res = $this->NodeModel->checkNodeRequest($node_data);
+        if(!$res['IsSuccess']){
+            return $this->http_output->notPut($res['Code'], $res['Message']);
+        }
+        ProcessManager::getInstance()
+                    ->getRpcCall(PeerProcess::class, true)
+                    ->broadcast(json_encode(['broadcastType' => 'Pledge', 'Data' => $node_data]));
+        return $this->http_output->yesPut('质押提交成功!');
     }
 
     /**
@@ -141,7 +162,7 @@ class NodeController extends Controller
         }
         //先获取下一轮的投票结果,先设定获取一百万条数据
         $incentive_users = [];//可以享受激励的一千个用户地址
-        $vote_where = ['rounds' => $rounds, 'address' => ['$in' => $super_nodes]];
+        $vote_where = ['rounds' => 1, 'address' => ['$in' => $super_nodes]];
         $vote_sort = ['value' => -1];
         $vote_res = ProcessManager::getInstance()
                                     ->getRpcCall(VoteProcess::class)
@@ -182,6 +203,22 @@ class NodeController extends Controller
                                         ->getVoteList($super_where, $super_data, 1, 1000);
         return $this->http_output->lists($super_nodes['Data']);
 
+    }
+
+    public function tcp_superConsensus($param)
+    {
+        var_dump('收到');
+        ProcessManager::getInstance()
+                    ->getRpcCall(ConsensusProcess::class)
+                    ->superCheckBlock($param);
+        return $this->send(1);
+    }
+
+    public function tcp_testPool($parem)
+    {
+        var_dump($parem);
+        var_dump('收到');
+        return $this->send($parem);
     }
 
 

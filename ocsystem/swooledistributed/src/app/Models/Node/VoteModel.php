@@ -18,11 +18,29 @@ use Server\Components\CatCache\CatCacheRpcProxy;
 use app\Process\VoteProcess;
 use app\Process\TimeClockProcess;
 use app\Process\BlockProcess;
+use app\Process\TradingProcess;
 use Server\Components\Process\ProcessManager;
 use MongoDB;
 
 class VoteModel extends Model
 {
+    /**
+     * 交易处理模型
+     * @var
+     */
+    protected $TradingModel;
+
+    /**
+     * 交易序列化模型
+     * @var
+     */
+    protected $TradingEncodeModel;
+
+    /**
+     * 组装交易模型
+     * @var
+     */
+    protected $CreateTradingModel;
 
     /**
      * 当前区块高度
@@ -43,14 +61,12 @@ class VoteModel extends Model
     public function initialization(&$context)
     {
         $this->setContext($context);
-        //获取当前区块高度
-        $this->now_top_height = ProcessManager::getInstance()
-                                            ->getRpcCall(BlockProcess::class)
-                                            ->getTopBlockHeight();
-        //获取当前轮次
-        $this->now_round = ProcessManager::getInstance()
-                                        ->getRpcCall(TimeClockProcess::class)
-                                        ->getRounds();
+        //调用交易模型
+        $this->TradingModel = $this->loader->model('Trading/TradingModel', $this);
+        //调用交易序列化模型
+        $this->TradingEncodeModel = $this->loader->model('Trading/TradingEncodeModel', $this);
+        //调用生成交易模型
+        $this->CreateTradingModel = $this->loader->model('Trading/CreateTradingModel', $this);
     }
 
 
@@ -119,14 +135,23 @@ class VoteModel extends Model
      */
     public function checkVote($vote_data = [], $type = 1)
     {
+        //最新区块的高度
+        $now_top_height = ProcessManager::getInstance()
+                                        ->getRpcCall(BlockProcess::class)
+                                        ->getTopBlockHeight();
+        //当前轮次
+        $now_round = ProcessManager::getInstance()
+                                    ->getRpcCall(TimeClockProcess::class)
+                                    ->getRounds();
+
         if(empty($vote_data)){
             return returnError('请传入投票验证信息');
         }
 
         //验证投的区块高度是否有问题
-        $vote_rounds = $vote_data['rounds'] - $this->now_round;
+        $vote_rounds = $vote_data['rounds'] - $now_round;
         if($vote_rounds <= 0 || $vote_rounds > 2)
-            return returnError('投票轮次有误!当前轮次:'.$this->now_round);
+            return returnError('投票轮次有误!当前轮次:'.$now_round);
 
 
         if($type == 1){
@@ -140,11 +165,16 @@ class VoteModel extends Model
              * type != 1 用已经锁定的交易重新进行投票，只需要判断是否过期
              * 允许有2个块的误差时间
              */
-            if(abs(((floor($vote_data['value'] / 100000000) * 300) + $this->now_top_height) - $vote_data['lockTime'])  > 2)
-                return returnError('质押时间有误');
+            var_dump('42123153564');
+            var_dump($now_top_height);
+            $now_top_height = 1;
+            if(abs(((floor($vote_data['value'] / 100000000) * 300) + $now_top_height) - $vote_data['lockTime'])  > 2){
+                return returnError('质押时间有误11');
+            }
+
 
         }else{
-            if($this->now_top_height >= $vote_data['lockTime'])
+            if($now_top_height >= $vote_data['lockTime'])
                 return returnError('该交易已经解锁，请重新质押.');
         }
 
@@ -153,18 +183,6 @@ class VoteModel extends Model
          * 质押追加改为10000的倍数，因此不需要再查库验证
          * 如果本身就有质押，则视为追加质押，质押总数必须大于500only
          */
-        $vote_res = [];//投票情况
-//        $vote_ops = [
-//            '_id' => ['value' => ['$sum' => '$value']],
-//        ];
-        //查询条件
-//        $vote_march = [
-//            'rounds'    => $vote_data['rounds'],
-//            'voter'     =>  $vote_data['voter']
-//        ];//查询字段
-//        $vote_res = ProcessManager::getInstance()
-//                                    ->getRpcCall(VoteProcess::class)
-//                                    ->getVoteAggregation($vote_march, $vote_ops, 1, 1000000);
 
         $votes_where = [
             'rounds' => $vote_data['rounds'],
@@ -174,14 +192,16 @@ class VoteModel extends Model
         $vote_res = ProcessManager::getInstance()
                             ->getRpcCall(VoteProcess::class)
                             ->getVoteInfo($votes_where, $votes_data);
+        var_dump($vote_data);
+        var_dump($vote_res);
         //质押追加最低为100only
         if(empty($vote_res['Data'])){
             if($vote_data['value'] < 500)
-                return returnError('质押数量有误');
+                return returnError('质押数量有误1');
 
         }else{
             if(($vote_res['Data']['value'] + $vote_data['value']) < 200)
-                return returnError('质押数量有误');
+                return returnError('质押数量有误2');
 
             //证交易是否已经被使用
             foreach ($vote_res['Data']['txId'] as $vr_val){
@@ -193,18 +213,32 @@ class VoteModel extends Model
         return returnSuccess();
     }
 
+    /**
+     * 验证投标重投
+     * @param array $vote_data
+     * @return bool
+     */
     public function checkVoteAgain($vote_data = [])
     {
+        //最新区块的高度
+        $now_top_height = ProcessManager::getInstance()
+                                        ->getRpcCall(BlockProcess::class)
+                                        ->getTopBlockHeight();
+        //当前轮次
+        $now_round = ProcessManager::getInstance()
+                                    ->getRpcCall(TimeClockProcess::class)
+                                    ->getRounds();
+
         if(empty($vote_data)){
             return returnError('请传入投票验证信息');
         }
 
         //验证投的区块高度是否有问题
-        $vote_rounds = $vote_data['rounds'] - $this->now_round;
+        $vote_rounds = $vote_data['rounds'] - $now_round;
         if($vote_rounds <= 0 || $vote_rounds > 2)
-            return returnError('投票轮次有误!当前轮次:'.$this->now_round);
+            return returnError('投票轮次有误!当前轮次:'.$now_round);
 
-        if($this->now_top_height >= $vote_data['lockTime'])
+        if($now_top_height >= $vote_data['lockTime'])
             return returnError('该交易已经解锁，请重新质押.');
 
         $votes_where = [
@@ -221,6 +255,84 @@ class VoteModel extends Model
         }elseif(!empty($vote_res['Data']) && ($vote_res['Data']['value'] + $vote_data['value']) < 200000000){
             return returnError('质押数量有误');
         }
+        var_dump($vote_res);
+        return returnSuccess();
+    }
+
+    /**
+     * 验证投票请求
+     * @param array $vote_data
+     * @return bool
+     */
+    public function checkVoteRequest($vote_data = [])
+    {
+        var_dump($vote_data);
+        $vote_res = [];//投票操作结果
+        $check_vote = [];//需要验证的投票数据
+        $check_vote_res = [];//投票验证结果
+        $check_trading_res = [];//交易验证结果
+        $trading_res = [];//交易操作验证结果
+        //做交易所有权验证
+//        $validation = $this->Validation->varifySign($trading_data);
+//        if(!$validation['IsSuccess']){
+//            return $this->http_output->notPut($validation['Code'], $validation['Message']);
+//        }
+
+        //反序列化交易
+        $decode_trading = $this->TradingEncodeModel->decodeTrading($vote_data['pledge']['trading']);
+        if($decode_trading['lockType'] != 2){
+            return returnError('质押类型有误.');
+        }
+        $check_vote['value'] = $decode_trading['vout'][0]['value'] ?? 0;//质押金额(循环获取)
+        $check_vote['rounds'] = $vote_data['rounds'];//所投轮次
+        $check_vote['lockTime'] = $decode_trading['lockTime'];//质押时间
+        $check_vote['voter'] = $vote_data['voter'];//质押人员
+        $vote_type = $vote_data['voteAgain'] ?? 1;//投票类型
+        //根据投票类型，插入质押的txId
+        if($vote_type == 1){
+            $check_vote['txId'][$decode_trading['txId']] = $decode_trading['txId'];
+        }else{
+            //重质押获取vin中的txId
+            $check_vote['txId'][$decode_trading['txId']] = $decode_trading['txId'];
+            foreach ($decode_trading['vin'] as $dt_val){
+                $check_vote['txId'][$dt_val['txId']] = $dt_val['txId'];
+            }
+        }
+        $check_vote_res = $this->checkVote($check_vote, $vote_type);
+        var_dump($check_vote_res);
+        if(!$check_vote_res['IsSuccess']) {
+            return returnError($check_vote_res['Message']);
+        }
+        var_dump(2);
+        //验证交易是否可用
+        $check_trading_res = ProcessManager::getInstance()
+                                        ->getRpcCall(TradingProcess::class)
+                                        ->checkTrading($decode_trading, $vote_data['voter'], $vote_type);
+        var_dump(3);
+        if(!$check_trading_res['IsSuccess']){
+            return returnError($check_trading_res['Message'], $check_trading_res['Code']);
+        }
+
+        if($vote_type == 1){
+            var_dump(4);
+            //交易入库
+            $trading_res = $this->TradingModel->createTradingEecode($vote_data['pledge']);
+            if(!$trading_res['IsSuccess']){
+                return returnError($trading_res['Message']);
+            }
+        }
+        var_dump(5);
+
+        //交易验证成功，投票写入数据库
+        $check_vote['address'] = $vote_data['address'];
+        //重置序号
+        sort($check_vote['txId']);
+
+        $vote_res = $this->submitVote($check_vote);
+        if(!$vote_res['IsSuccess']){
+            return returnError($vote_res['Message']);
+        }
+        var_dump('over');
         return returnSuccess();
     }
 

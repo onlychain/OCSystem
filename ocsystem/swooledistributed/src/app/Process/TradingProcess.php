@@ -24,6 +24,13 @@ use Server\Components\Process\ProcessManager;
 class TradingProcess extends Process
 {
     /**
+     * 交易状态
+     * @var bool
+     * 1:交易未同步;2:交易同步中;3:交易同步完成;4:交易同步失败;
+     */
+    private $TradingState = 1;
+
+    /**
      * 存储数据库对象
      * @var
      */
@@ -70,6 +77,18 @@ class TradingProcess extends Process
      * @var
      */
     private $Using = [];
+
+    /**
+     * 区块游码，每次只获取一个块的交易数据
+     * @var int
+     */
+    private $BlockIndex = 478;
+
+    /**
+     * 同步时的最高区块
+     * @var int
+     */
+    private $TopBlockHigh = 548;
 
     /**
      * 初始化函数
@@ -340,11 +359,14 @@ class TradingProcess extends Process
         $purse_trading = [
             'txId'  =>  $trading['txId'],
         ];
+        var_dump(21);
         $purses = $this->getAvailableTrading($address, $trading['vin']);
+        var_dump(22);
         if(!$purses['IsSuccess']){
             return returnError($purses['Message']);
         }
         $purses = $purses['Data'];
+        var_dump(23);
 //        $purses = $this->PurseModel->getPurse($address, $purse_trading);
         $this->Using = CatCacheRpcProxy::getRpc()->offsetGet('Using');
 //        if(empty($purses)){
@@ -352,9 +374,11 @@ class TradingProcess extends Process
 //            $overload = false;
 //        }
         //获取最新的区块高度
+        var_dump(24);
         $top_block_height = ProcessManager::getInstance()
                                         ->getRpcCall(BlockProcess::class)
                                         ->getTopBlockHeight();
+        var_dump(25);
         //查看缓存中是否有
         $availabler_ecords = [//初始化可用交易记录
             'vin'   =>  [],
@@ -370,11 +394,12 @@ class TradingProcess extends Process
          * $top_block_height当前最高区块
          * $type 1:正常交易， 2：不验证锁定时间，不进行交易处理，仅做交易可用性验证
          */
+
         array_map(function ($tx, $to) use ($address, &$purses, &$availabler_ecords, $top_block_height, $type)
         {
             //重新声明两个全局变量
             global $del_trading;
-            //处理地址以及金额
+            //处理地址以及金额!empty($to) &&
             if($to != null){
                 $availabler_ecords['vout'][]    =  [
                     'value'     =>  $to['value'],
@@ -385,7 +410,6 @@ class TradingProcess extends Process
             }
             //处理交易输入
             if($tx != null && isset($purses[$tx['txId']])){
-                var_dump($purses[$tx['txId']]);
                 //判断交易是否被锁定
                 if($type == 1){
                     if($top_block_height < $purses[$tx['txId']]['lockTime']){
@@ -406,8 +430,9 @@ class TradingProcess extends Process
                     $purses[$tx['txId']]['reqSigs'],
                     $tx['scriptSig']
                 );
-//                if(!$check_res['IsSuccess'])
-//                    return returnError('交易解锁失败。');
+                var_dump($check_res);
+                if(!$check_res['IsSuccess'])
+                    return returnError('交易解锁失败。');
 
                 //赋值组成vin,
                 $availabler_ecords['vin'][] = [
@@ -459,10 +484,8 @@ class TradingProcess extends Process
     {
         //先从缓存中获取数据
         $txids = [];//存储需要的tx
-//        $need_txids = [];//需要用到的交易
         foreach ($vin as $v_key => $v_val){
             $txids[] = $v_val['txId'];
-//            $need_txids[$v_val['txId']] = $purses[$v_val['txId']];
         }
         $purses = $this->PurseModel->getPurse($address, $txids);
         if($purses == false){
@@ -645,6 +668,109 @@ class TradingProcess extends Process
             return returnError('删除失败!');
         }
         return returnSuccess();
+    }
+
+    /**
+     * 同步交易数据
+     * 同步交易必须要在区块同步完成之后执行
+     * @oneWay
+     */
+    public function syncTrading(array $trading_data = [])
+    {
+        $flag = true;
+        //修改交易同步状态
+        $this->setTradingState(2);
+        if($this->TopBlockHigh == 0){
+            $this->TopBlockHigh = ProcessManager::getInstance()
+                                                ->getRpcCall(BlockProcess::class)
+                                                ->getSyncBlockTopHeight();
+            var_dump($this->TopBlockHigh);
+        }
+        //循环获取区块数据,每次获取50个区块存储的交易
+        if ($this->TopBlockHigh >= $this->BlockIndex){
+            var_dump('开始同步数据');
+            if(!empty($trading_data)){
+                var_dump('处理同步过来了的val');
+                //处理数据并插入
+                $sync_txids = [];
+                $tinsert_trading = [];//存储插入的交易
+                foreach ($trading_data as $td_key => $td_val){
+                    $trading_txid = '';
+                    $trading_txid = bin2hex(hash('sha256', hash('sha256', hex2bin($td_val), true), true));
+                    $sync_txids[] = $trading_txid;
+                    $tinsert_trading[] = [
+                        '_id'   =>  $trading_txid,
+                        'trading'   =>  $td_val,
+                    ];
+            }
+                //先将数据库中的数据删除
+                $delete_where = ['_id' => ['$in' => $sync_txids]];
+                $delete_res = $this->deleteTradingPoolMany($delete_where);
+                var_dump($delete_res);
+                if(!$delete_res['IsSuccess']){
+                    var_dump(1);
+                    throw new \InvalidArgumentException('error:syncTrading is failure!');
+                    //交易同步状态改为1，同步失败,等待重新同步
+                    $this->setTradingState(1);
+                    $this->TopBlockHigh = 1;
+                    return;
+                }
+                var_dump(2);
+                //插入交易数据
+                $this->insertTradingMany($tinsert_trading);
+                $trading_data = [];
+                ++$this->BlockIndex;
+            }
+            var_dump('继续处理要获取的数据');
+            $trading_txids = [];//存储交易哈希
+            $block_where = [
+                'height' => $this->BlockIndex,
+            ];
+            $block_data = ['headHash' => 1, 'tradingInfo' => 1, '_id' => 0];
+            $block_res = ProcessManager::getInstance()
+                                        ->getRpcCall(BlockProcess::class)
+                                        ->getBlockHeadInfo($block_where, $block_data);
+            var_dump($block_where);
+            var_dump($block_res);
+            if(!empty($block_res['Data'])){
+                //获取需要的交易
+                foreach ($block_res['Data']['tradingInfo'] as $br_key => $br_val){
+                    var_dump($br_val);
+//                    $trading_txids[] = array_merge($trading_txids, $br_val['tradingInfo']);
+                    $trading_txids[$br_val] = $br_val;
+                }
+//                $trading_txids = $block_res['Data']['tradingInfo'];
+                //发起获取交易请求
+                $trading_key = '';
+                $trading_key = 'Trading-'.$block_res['Data']['headHash'];
+                var_dump($trading_key);
+                ProcessManager::getInstance()
+                                ->getRpcCall(PeerProcess::class, true)
+                                ->p2pGetVal($trading_key, $trading_txids);
+            }
+        }
+        //循环结束，修改状态
+        if($this->TopBlockHigh <= $this->BlockIndex){
+            $this->setTradingState(3);
+        }
+    }
+
+    /**
+     * 获取交易同步状态
+     * @return bool
+     */
+    public function getTradingState() : int
+    {
+        return $this->TradingState;
+    }
+
+    /**
+     * 设置交易步状态
+     * @param bool $state
+     */
+    public function setTradingState(int $state = 1)
+    {
+        $this->TradingState = $state;
     }
 
     /**

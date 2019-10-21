@@ -46,8 +46,12 @@ class MerkleTreeModel extends Model
      * 设置叶子节点
      * @param type $node
      */
-    public function setNodeData($node = array())
+    public function setNodeData(array $node = array())
     {
+        if(count($node) == 1){
+            $this->nodeData[0] = $node;
+            $this->nodeData[1] = $node;
+        }
         $this->nodeData = $node;
         return $this;
     }

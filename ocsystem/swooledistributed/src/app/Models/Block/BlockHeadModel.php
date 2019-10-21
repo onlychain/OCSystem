@@ -103,11 +103,22 @@ class BlockHeadModel extends Model
     }
 
     /**
+     * 设置版本号
+     * @param type $version
+     * @return $this
+     */
+    public function setVersion(int $version = 1)
+    {
+        $this->version = $version;
+        return $this;
+    }
+
+    /**
      * 获取版本号
      * @param type $version
      * @return $this
      */
-    public function getVersion() : string
+    public function getVersion() : int
     {
         return $this->version;
     }
@@ -209,6 +220,23 @@ class BlockHeadModel extends Model
         $json_hash = json_encode($head_hash);
         $head_hash["headHash"] = hash("sha3-256", $json_hash);
         //返回，后续操作在调用函数中进行
+        $this->clearBlockHead();
         return $head_hash;
+    }
+
+    /**
+     * 清理构建区块缓存
+     */
+    public function clearBlockHead()
+    {
+        $this->headHash = '';
+        $this->parentHash = '';
+        $this->merkleRoot = '';
+        $this->thisTime = 0;
+        $this->height = 0;
+        $this->txNum = 0;
+        $this->signature = '';
+        $this->version = 1;
+        $this->tradingInfo = [];
     }
 }

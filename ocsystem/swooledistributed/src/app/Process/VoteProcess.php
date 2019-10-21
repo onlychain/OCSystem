@@ -213,6 +213,9 @@ class VoteProcess extends Process
     public function updateVote($where = [], $data = [])
     {
         $insert_res = $this->Vote->updateOne($where, $data, ['upsert' => true]);
+        var_dump($insert_res);
+        var_dump($where);
+        var_dump($data);
         if(!$insert_res->isAcknowledged()){
             return returnError('修改失败!');
         }
@@ -225,6 +228,6 @@ class VoteProcess extends Process
      */
     public function onShutDown()
     {
-        echo "交易进程关闭.";
+        echo "投票进程关闭.";
     }
 }

@@ -7,6 +7,7 @@ use Server\Asyn\TcpClient\SdTcpRpcPool;
 use Server\CoreBase\SwooleException;
 use MongoDB;
 //自定义进程
+use app\Process\PeerProcess;
 use app\Process\TradingProcess;
 use app\Process\TradingPoolProcess;
 use app\Process\ConsensusProcess;
@@ -150,9 +151,9 @@ class TradingController extends Controller
     }
 
     /**
-     * 接收交易接口
+     * 接收交易接口1
      */
-    public function http_receivingTransactions()
+    public function http_receivingTransactions1()
     {
         $test_utxo = [];
         $trading = [];//存入
@@ -204,12 +205,39 @@ class TradingController extends Controller
         if(!$check_res['IsSuccess']){
             return $this->http_output->notPut($check_res['Code'], $check_res['Message']);
         }
+        //入库之前先将交易广播，一定要验证后再广播，防止垃圾交易阻塞网络
+        p2p_broadcast(json_encode(['broadcastType' => 'Trading', 'Data' => $trading_data]));
         //交易入库
         $insert_res = $this->TradingModel->createTradingEecode($trading_data);
         if(!$insert_res['IsSuccess']){
             return $this->http_output->notPut($insert_res['Code'], $insert_res['Message']);
         }
         return $this->http_output->yesPut();
+    }
+
+    /**
+     * 接收交易接口
+     */
+    public function http_receivingTransactions()
+    {
+        $test_utxo = [];
+        $trading = [];//存入
+        $insert_res = [];//插入数据库结果
+//        $trading_data = $this->http_input->getAllPostGet('text');
+        $trading_data = $this->http_input->getAllPostGet();
+        //验证是否有上传接口数据
+        if (empty($trading_data)) {
+            return $this->http_output->notPut(1004);
+        }
+        $res = $this->TradingModel->checkTradingRequest($trading_data);
+        if(!$res['IsSuccess']){
+            return $this->http_output->notPut($res['Code'], $res['Message']);
+        }
+        //入库之前先将交易广播，一定要验证后再广播，防止垃圾交易阻塞网络
+        ProcessManager::getInstance()
+                        ->getRpcCall(PeerProcess::class, true)
+                        ->broadcast(json_encode(['broadcastType' => 'Trading', 'Data' => $trading_data]));
+        return $this->http_output->yesPut('交易提交成功!');
     }
 
     /**
