@@ -571,16 +571,14 @@ class BlockProcess extends Process
         $trading_info = '';
         $count = count($cenesis_trading);
         foreach($cenesis_trading as $ct_key => $ct_val){
-            $trading_info = $this->TradingEncodeModel->setVin($ct_val['tx'])
-                                                ->setVout($ct_val['to'])
-                                                ->setTime($ct_val['time'])
-                                                ->setLockTime(1 + 15768000)
-                                                ->setLockType($ct_val['lockType'])
-                                                ->setIns('')
-                                                ->encodeTrading();
-
-            $tx_id = bin2hex(hash('sha256', hash('sha256', hex2bin($trading_info), true), true));
             if($ct_key + 1 < $count){
+                $trading_info = $this->TradingEncodeModel->setVin($ct_val['tx'])
+                                                        ->setVout($ct_val['to'])
+                                                        ->setTime($ct_val['time'])
+                                                        ->setLockTime(1 + 15768000)
+                                                        ->setLockType($ct_val['lockType'])
+                                                        ->setIns('')
+                                                        ->encodeTrading();
                 $nodes[] = [
                     'pledge' => [
                         'trading'   =>  $trading_info,
@@ -591,7 +589,16 @@ class BlockProcess extends Process
                     'ip'            => $ct_val['ip'],
                     'port'          => $ct_val['port']
                 ];
+            }else{
+                $trading_info = $this->TradingEncodeModel->setVin($ct_val['tx'])
+                                                        ->setVout($ct_val['to'])
+                                                        ->setTime($ct_val['time'])
+                                                        ->setLockTime(0)
+                                                        ->setLockType($ct_val['lockType'])
+                                                        ->setIns('')
+                                                        ->encodeTrading();
             }
+            $tx_id = bin2hex(hash('sha256', hash('sha256', hex2bin($trading_info), true), true));
             $tx_ids[] = $tx_id;
             $trading[] = [
                 '_id'   =>  $tx_id,
@@ -666,7 +673,6 @@ class BlockProcess extends Process
         //循环插入质押
         foreach ($nodes as $n_key => $n_val){
             $a = $this->NodeModel->checkNodeRequest($n_val, 2);
-            var_dump($a);
         }
 
         //插入交易数据(最后一笔非质押数据)

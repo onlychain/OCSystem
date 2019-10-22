@@ -43,7 +43,6 @@ class IndexModel extends Model
         $genesis_block = ProcessManager::getInstance()
                                         ->getRpcCall(BlockProcess::class)
                                         ->checkGenesisBlock();
-        return;
         //定期循环检查
 
 
@@ -58,16 +57,25 @@ class IndexModel extends Model
         //验证时间钟是否同步
 
         //时间钟同步函数，验证时间钟是否同步
-//        $this->runTimeClock();openClock
+//        $this->runTimeClock();
 //        $time_check_res = ProcessManager::getInstance()
 //                                        ->getRpcCall(TimeClockProcess::class)
 //                                        ->checkTimeClock();
 //        if(!$time_check_res['IsSuccess']){
 //            return;
 //        }
-//        ProcessManager::getInstance()
-//                        ->getRpcCall(TimeClockProcess::class, true)
-//                        ->runTimeClock();
+        ProcessManager::getInstance()
+                        ->getRpcCall(TimeClockProcess::class, true)
+                        ->runTimeClock();
+
+        /**
+         * 开启共识
+         */
+        var_dump('chukuai');
+        $identity = ProcessManager::getInstance()
+                            ->getRpcCall(ConsensusProcess::class, true)
+                            ->coreNode();
+        return;
 
         //验证数据是否同步完成
         /**

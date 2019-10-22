@@ -461,7 +461,7 @@ class TestController extends Controller
     public function http_testTimeClock()
     {
         ProcessManager::getInstance()
-                        ->getRpcCall(TimeClockProcess::class)
+                        ->getRpcCall(TimeClockProcess::class, true)
                         ->runTimeClock();
     }
 

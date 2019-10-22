@@ -102,6 +102,8 @@ class BlockBaseModel extends Model
                                         ->getRpcCall(TradingPoolProcess::class)
                                         ->getTradingPoolList($trading_where, $trading_data, 1, count($block_head['tradingInfo']));
         }
+        var_dump(count($trading_res['Data']));
+        var_dump(count($block_head['tradingInfo']));
         if(empty($trading_res['Data']) ||  count($trading_res['Data']) != count($block_head['tradingInfo'])){
             return returnError('区块验证失败!');
         }
