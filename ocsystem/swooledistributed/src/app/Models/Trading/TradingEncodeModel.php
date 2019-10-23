@@ -103,6 +103,12 @@ class TradingEncodeModel extends Model
     protected $lockType = '01';
 
     /**
+     * 交易手续费
+     * @var string
+     */
+    protected $cost = '0000000000000000';
+
+    /**
      * 当被loader时会调用这个方法进行初始化
      * @param $context
      */
@@ -130,7 +136,7 @@ class TradingEncodeModel extends Model
         //序列化交易输出部分
         $encode_vout_str .= $this->getVoutNum();
         //序列化交易尾部公共部分
-        $encode_end_str = $this->getTime() . $this->getLockTime() . $this->getLockType() . $this->getIns();
+        $encode_end_str = $this->getTime() . $this->getLockTime() . $this->getLockType() . $this->getCost() . $this->getIns();
         //拼接交易输出
         if(!empty($this->vout)){
             foreach ($this->vout as $vout_key => $vout_val){
@@ -280,6 +286,10 @@ class TradingEncodeModel extends Model
         $decode_trading['lockType'] = hexdec(substr($trading, $str_index, 2));
         //索引递进2个字符1个字节
         $str_index += 2;
+        //解析手续费
+        $decode_trading['cost'] = hexdec(substr($trading, $str_index, 16));
+        //索引递进16个字符
+        $str_index += 16;
         //解析自定义信息内容
         $ins_len = hexdec(substr($trading, $str_index, 2));
         //索引递进2个字符
@@ -459,6 +469,26 @@ class TradingEncodeModel extends Model
     public function setPublicKey(string $publick_key = '')
     {
         $this->publicKey = $publick_key;
+        return $this;
+    }
+
+    /**
+     * 获取手续费
+     * @return int
+     */
+    public function getCost() : string
+    {
+        return $this->cost;
+    }
+
+    /**
+     * 设置手续费
+     * @param int $cost
+     * @return $this
+     */
+    public function setCost(int $cost = 0)
+    {
+        $this->cost = str_pad(dechex(abs($cost)), 16, '0', STR_PAD_LEFT);;
         return $this;
     }
 

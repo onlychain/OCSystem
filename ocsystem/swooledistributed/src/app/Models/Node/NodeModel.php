@@ -151,10 +151,10 @@ class NodeModel extends Model
             return returnError('质押金额必须是整数');
 
         /*
-         * 质押时间必须是一年
+         * 质押时间必须是一年以上
          * 允许有10个块的误差时间
          */
-        if(abs(($node_data['lockTime'] - $top_block_height - 15768000)) > 10){
+        if(($node_data['lockTime'] - $top_block_height - 15768000) < 0){
             return returnError('质押时间有误');
         }
         return returnSuccess();
@@ -195,7 +195,7 @@ class NodeModel extends Model
             //验证交易是否可用
             $check_trading_res = ProcessManager::getInstance()
                 ->getRpcCall(TradingProcess::class)
-                ->checkTrading($decode_trading, $node_data['address']);
+                ->checkTrading($decode_trading, $node_data['pledge']['address']);
             if(!$check_trading_res['IsSuccess']){
                 return returnError($check_trading_res['Message'], $check_trading_res['Code']);
             }

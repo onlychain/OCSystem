@@ -165,13 +165,9 @@ class VoteModel extends Model
              * type != 1 用已经锁定的交易重新进行投票，只需要判断是否过期
              * 允许有2个块的误差时间
              */
-            var_dump('42123153564');
-            var_dump($now_top_height);
-            $now_top_height = 1;
-            if(abs(((floor($vote_data['value'] / 100000000) * 300) + $now_top_height) - $vote_data['lockTime'])  > 2){
+            if(((floor($vote_data['value'] / 100000000) * 300) + $now_top_height) - $vote_data['lockTime']  < 0){
                 return returnError('质押时间有误11');
             }
-
 
         }else{
             if($now_top_height >= $vote_data['lockTime'])
@@ -192,8 +188,6 @@ class VoteModel extends Model
         $vote_res = ProcessManager::getInstance()
                             ->getRpcCall(VoteProcess::class)
                             ->getVoteInfo($votes_where, $votes_data);
-        var_dump($vote_data);
-        var_dump($vote_res);
         //质押追加最低为100only
         if(empty($vote_res['Data'])){
             if($vote_data['value'] < 500)

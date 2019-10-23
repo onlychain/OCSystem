@@ -64,17 +64,17 @@ class IndexModel extends Model
 //        if(!$time_check_res['IsSuccess']){
 //            return;
 //        }
-        ProcessManager::getInstance()
-                        ->getRpcCall(TimeClockProcess::class, true)
-                        ->runTimeClock();
+//        ProcessManager::getInstance()
+//                        ->getRpcCall(TimeClockProcess::class, true)
+//                        ->runTimeClock();
 
         /**
          * 开启共识
          */
-        var_dump('chukuai');
-        $identity = ProcessManager::getInstance()
-                            ->getRpcCall(ConsensusProcess::class, true)
-                            ->coreNode();
+//        var_dump('chukuai');
+//        $identity = ProcessManager::getInstance()
+//                            ->getRpcCall(ConsensusProcess::class, true)
+//                            ->coreNode();
         return;
 
         //验证数据是否同步完成
@@ -179,7 +179,27 @@ class IndexModel extends Model
     {
         ProcessManager::getInstance()
                 ->getRpcCall(TimeClockProcess::class, true)
-                ->runTimerClock();
+                ->runTimeClock();
         return true;
+    }
+
+    public function openState()
+    {
+        $time = date('Y-m-d-H-i-s', time());
+        $time = explode('-', $time);
+        var_dump('当前时间' . $time[5]);
+        if($time[5] == '30' || $time[5] == '00'){
+            var_dump('开启状态');
+            ProcessManager::getInstance()
+                ->getRpcCall(TimeClockProcess::class, true)
+                ->openClock();
+//            ProcessManager::getInstance()
+//                ->getRpcCall(ConsensusProcess::class, true)
+//                ->openConsensus();
+//            var_dump('出块');
+//            ProcessManager::getInstance()
+//                ->getRpcCall(ConsensusProcess::class, true)
+//                ->coreNode();
+        }
     }
 }

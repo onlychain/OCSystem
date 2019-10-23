@@ -456,7 +456,6 @@ class PurseModel extends Model
             $pagesize = count($trading) + 10;
         }
         $new_purse = $this->getPurseFromMongoDb($purse_where, $purse_data, 1, $pagesize);
-
         $purse = $purse != null ? array_merge($purse, $new_purse) : $new_purse;
         //如果没有数据
         if(empty($purse)){
