@@ -165,7 +165,7 @@ class VoteModel extends Model
              * type != 1 用已经锁定的交易重新进行投票，只需要判断是否过期
              * 允许有2个块的误差时间
              */
-            if(((floor($vote_data['value'] / 100000000) * 300) + $now_top_height) - $vote_data['lockTime']  < 0){
+            if($vote_data['lockTime'] - ((floor($vote_data['value'] / 100000000) * 300) + $now_top_height)  < 0){
                 return returnError('质押时间有误11');
             }
 

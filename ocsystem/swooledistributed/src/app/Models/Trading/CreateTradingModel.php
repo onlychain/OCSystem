@@ -169,7 +169,7 @@ class CreateTradingModel extends Model
             case 3: $lock_time = $top_block_height + 15768000;
                 break;
             //锁死，目前锁200年
-            case 4: $lock_time = $top_block_height + 3153600000;
+            case 4: $lock_time = 4294967295;
                 break;
             //默认情况，默认为类型1
             default : $lock_time = 0;

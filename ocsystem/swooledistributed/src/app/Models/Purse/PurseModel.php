@@ -452,7 +452,10 @@ class PurseModel extends Model
         $purse_data = ['_id' => 0];
         $pagesize = $this->TradingLens;
         if(!empty($txids)){
-            $purse_where['txId'] = ['$in' => $txids];
+            $purse_where = [
+                '$and' => [['address' => $address]],
+                '$or'  => [['lockTime' => ['$gte' => 4294967295]], ['txId' => ['$in'   => $txids]]]
+            ];
             $pagesize = count($trading) + 10;
         }
         $new_purse = $this->getPurseFromMongoDb($purse_where, $purse_data, 1, $pagesize);

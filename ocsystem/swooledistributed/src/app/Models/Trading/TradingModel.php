@@ -148,6 +148,7 @@ class TradingModel extends Model
                 '_id'       =>  bin2hex(hash('sha256', hash('sha256', hex2bin($t_val), true), true)),
                 'trading'   =>  $t_val,
                 'noce'      =>  'ffffffff',
+                'time'      =>  time()
             ];
         }
         $insert_res = ProcessManager::getInstance()

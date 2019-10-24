@@ -89,7 +89,7 @@ class BlockBaseModel extends Model
         }
         //验证交易是否都存在
         $trading_where = ['_id' => ['$in' => $block_head['tradingInfo']]];
-        $trading_data = ['trading' => 0];
+        $trading_data = ['trading' => 0, 'time' => 0];
         $trading_res = [];
         if($trading_type == 1){
             //查询交易内容
