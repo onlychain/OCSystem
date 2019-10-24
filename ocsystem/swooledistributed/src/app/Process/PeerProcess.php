@@ -111,7 +111,6 @@ class PeerProcess extends Process
             //如果种子节点列表为空，代表本节点就是种子节点
             $seed_nodes = [];
         }
-        var_dump($seed_nodes);
         //初始化P2P网络节点
         p2p_init($node_name, $seed_nodes, 8997);
         return true;
@@ -151,8 +150,6 @@ class PeerProcess extends Process
         var_dump($data);
 		p2p_get($key, $data, function ($values) use($key) {
 		    var_dump('接收回调数据');
-		    var_dump($values);
-		    var_dump($key);
             $kes = explode('-', $key);
             //根据key执行回调方法
             switch ($kes[0]){
@@ -392,6 +389,7 @@ class PeerProcess extends Process
      */
     public function broadcast(string $content = '')
     {
+        var_dump($this->getNodes());
         var_dump('广播');
         p2p_broadcast($content);
     }

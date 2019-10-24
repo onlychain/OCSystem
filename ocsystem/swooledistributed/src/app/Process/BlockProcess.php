@@ -689,6 +689,7 @@ class BlockProcess extends Process
         $this->setTopBlockHeight(1);
         //设置最新区块的hash
         $this->setTopBlockHash($black_head['headHash']);
+        var_dump('初始化结束');
         return returnSuccess();
 
     }

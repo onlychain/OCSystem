@@ -359,14 +359,11 @@ class TradingProcess extends Process
         $purse_trading = [
             'txId'  =>  $trading['txId'],
         ];
-        var_dump(21);
         $purses = $this->getAvailableTrading($address, $trading['vin']);
-        var_dump(22);
         if(!$purses['IsSuccess']){
             return returnError($purses['Message']);
         }
         $purses = $purses['Data'];
-        var_dump(23);
 //        $purses = $this->PurseModel->getPurse($address, $purse_trading);
         $this->Using = CatCacheRpcProxy::getRpc()->offsetGet('Using');
 //        if(empty($purses)){
@@ -374,11 +371,9 @@ class TradingProcess extends Process
 //            $overload = false;
 //        }
         //获取最新的区块高度
-        var_dump(24);
         $top_block_height = ProcessManager::getInstance()
                                         ->getRpcCall(BlockProcess::class)
                                         ->getTopBlockHeight();
-        var_dump(25);
         //查看缓存中是否有
         $availabler_ecords = [//初始化可用交易记录
             'vin'   =>  [],
@@ -399,7 +394,7 @@ class TradingProcess extends Process
         {
             //重新声明两个全局变量
             global $del_trading;
-            //处理地址以及金额!empty($to) &&
+            //处理地址以及金额
             if($to != null){
                 $availabler_ecords['vout'][]    =  [
                     'value'     =>  $to['value'],
@@ -430,7 +425,6 @@ class TradingProcess extends Process
                     $purses[$tx['txId']]['reqSigs'],
                     $tx['scriptSig']
                 );
-                var_dump($check_res);
                 if(!$check_res['IsSuccess'])
                     return returnError('交易解锁失败。');
 
@@ -706,16 +700,13 @@ class TradingProcess extends Process
                 //先将数据库中的数据删除
                 $delete_where = ['_id' => ['$in' => $sync_txids]];
                 $delete_res = $this->deleteTradingPoolMany($delete_where);
-                var_dump($delete_res);
                 if(!$delete_res['IsSuccess']){
-                    var_dump(1);
                     throw new \InvalidArgumentException('error:syncTrading is failure!');
                     //交易同步状态改为1，同步失败,等待重新同步
                     $this->setTradingState(1);
                     $this->TopBlockHigh = 1;
                     return;
                 }
-                var_dump(2);
                 //插入交易数据
                 $this->insertTradingMany($tinsert_trading);
                 $trading_data = [];
@@ -730,12 +721,9 @@ class TradingProcess extends Process
             $block_res = ProcessManager::getInstance()
                                         ->getRpcCall(BlockProcess::class)
                                         ->getBlockHeadInfo($block_where, $block_data);
-            var_dump($block_where);
-            var_dump($block_res);
             if(!empty($block_res['Data'])){
                 //获取需要的交易
                 foreach ($block_res['Data']['tradingInfo'] as $br_key => $br_val){
-                    var_dump($br_val);
 //                    $trading_txids[] = array_merge($trading_txids, $br_val['tradingInfo']);
                     $trading_txids[$br_val] = $br_val;
                 }
@@ -743,7 +731,6 @@ class TradingProcess extends Process
                 //发起获取交易请求
                 $trading_key = '';
                 $trading_key = 'Trading-'.$block_res['Data']['headHash'];
-                var_dump($trading_key);
                 ProcessManager::getInstance()
                                 ->getRpcCall(PeerProcess::class, true)
                                 ->p2pGetVal($trading_key, $trading_txids);

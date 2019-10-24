@@ -57,8 +57,8 @@ class TimeClockProcess extends Process
     public function start($process)
     {
         var_dump('TimeClockProcess');
-        $this->clock = 125;//初始化时间钟
-        $this->clockState = true;//时间钟状态
+        $this->clock = 0;//初始化时间钟
+        $this->clockState = false;//时间钟状态
         $this->ConsensusModel = new ConsensusModel();//实例化共识模型
 //        $this->runTimeClock();
     }
@@ -113,21 +113,27 @@ class TimeClockProcess extends Process
      */
     public function runTimeClock()
     {
+//        while (true) {
+            if ($this->clockState) {
+                var_dump('当前时间' . $this->clock);
+                if ($this->clock <= 0 || $this->clock == NULL) {
+                    //先关闭节点
+                    //关闭工作
+                    ProcessManager::getInstance()
+                                    ->getRpcCall(ConsensusProcess::class)
+                                    ->closeConsensus();
 
-//        while (true){
-            var_dump($this->clock);
-            var_dump($this->clockState);
-            if($this->clockState){
-//                if($this->clock <= 0 || $this->clock == NULL){
+                    var_dump('开启新一轮节点更新');
+                    var_dump('当前轮次:' . ($this->rounds +1));
                     $this->clock = 125;
                     ++$this->rounds;
                     /**
                      * 更新备选超级节点数据
                      */
                     $examination_res = ProcessManager::getInstance()
-                                                    ->getRpcCall(NodeProcess::class)
-                                                    ->examinationNode();
-                    if(!$examination_res['IsSuccess']){
+                        ->getRpcCall(NodeProcess::class)
+                        ->examinationNode();
+                    if (!$examination_res['IsSuccess']) {
                         return;
 //                        continue;
                     }
@@ -135,63 +141,67 @@ class TimeClockProcess extends Process
                      * 开始统计投票，决定下一轮的超级节点
                      */
                     $rotation_res = ProcessManager::getInstance()
-                                                    ->getRpcCall(NodeProcess::class)
-                                                    ->rotationSuperNode($this->rounds);
-                    var_dump($rotation_res);
-                    var_dump(3);
-                    if(empty($rotation_res['Data'])){
-                        var_dump(4);
+                        ->getRpcCall(NodeProcess::class)
+                        ->rotationSuperNode($this->rounds);
+                    if (empty($rotation_res['Data'])) {
                         return;
 //                        continue;
                     }
-                    var_dump(5);
                     /**
                      * 更新当前节点信息
                      */
-                    if($rotation_res['Data'] == 0){
-
-                        //设置节点身份
-                        ProcessManager::getInstance()
-                                        ->getRpcCall(ConsensusProcess::class)
-                                        ->setNodeIdentity('ordinary');
-                        //关闭工作
-                        ProcessManager::getInstance()
-                                        ->getRpcCall(ConsensusProcess::class)
-                                        ->closeConsensus();
-                    }elseif($rotation_res['Data'] > 1){
-                        //设置节点身份
-                        ProcessManager::getInstance()
-                                        ->getRpcCall(ConsensusProcess::class)
-                                        ->setNodeIdentity('alternative');
-                        //开启工作
-                        ProcessManager::getInstance()
-                                        ->getRpcCall(ConsensusProcess::class)
-                                        ->openConsensus();
-                    }else{
-                        //设置节点身份
-                        ProcessManager::getInstance()
-                                        ->getRpcCall(ConsensusProcess::class)
-                                        ->setNodeIdentity('core');
-                        //开启节点
-                        ProcessManager::getInstance()
-                                            ->getRpcCall(ConsensusProcess::class)
-                                            ->openConsensus();
-                    }
-                    var_dump($rotation_res['Data']);
+                    var_dump('当前节点次序:' . $rotation_res['Data']);
                     //设置节点次序
                     ProcessManager::getInstance()
-                                    ->getRpcCall(ConsensusProcess::class)
-                                    ->setIndex($rotation_res['Data']);
+                                ->getRpcCall(ConsensusProcess::class)
+                                ->setIndex($rotation_res['Data']);
+
                     /**
                      * 刷新超级节点连接池
                      */
-
                     ProcessManager::getInstance()
-                                    ->getRpcCall(CoreNetworkProcess::class)
-                                    ->rushSuperNodeLink();
+                                ->getRpcCall(CoreNetworkProcess::class)
+                                ->rushSuperNodeLink();
+                    if ($rotation_res['Data'] == 0) {
+                        //设置节点身份
+                        ProcessManager::getInstance()
+                            ->getRpcCall(ConsensusProcess::class)
+                            ->setNodeIdentity('ordinary');
+                    } elseif ($rotation_res['Data'] > 3) {
+                        //设置节点身份
+                        ProcessManager::getInstance()
+                            ->getRpcCall(ConsensusProcess::class)
+                            ->setNodeIdentity('alternative');
+                        //开启工作
+                        ProcessManager::getInstance()
+                            ->getRpcCall(ConsensusProcess::class)
+                            ->openConsensus();
+                    } else {
+                        //设置节点身份
+                        ProcessManager::getInstance()
+                            ->getRpcCall(ConsensusProcess::class)
+                            ->setNodeIdentity('core');
+                        //开启工作
+                        ProcessManager::getInstance()
+                            ->getRpcCall(ConsensusProcess::class)
+                            ->openConsensus();
+                    }
+
+//                    ProcessManager::getInstance()
+//                        ->getRpcCall(ConsensusProcess::class, true)
+//                        ->chooseWork($this->clock);
+                    var_dump('round change over.');
+//                    return;
+                }
+                ProcessManager::getInstance()
+                    ->getRpcCall(ConsensusProcess::class, true)
+                    ->chooseWork($this->clock);
+                $this->clock = $this->clock - 2;
+
+
+                //一秒确认一次
+//                sleepCoroutine(1000);
             }
-            //一秒确认一次
-            sleepCoroutine(1000);
 //        }
     }
 

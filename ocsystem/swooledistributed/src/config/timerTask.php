@@ -20,24 +20,25 @@ $config['timerTask'] = [];
 $config['timerTask'][0] = [
     'model_name'    => 'Index/IndexModel',
     'method_name'   => 'index',
-    'interval_time' => 1,
+    'interval_time' => 2,
     'max_exec'      => 1,
     'delay'         => true,
 ];
 
-//$config['timerTask'][1] = [
-//    'model_name'    => 'Index/IndexModel',
-//    'method_name' => 'runConsensus',
-//    'interval_time' => 2,
-//    'delay'         => true,
-//];
+$config['timerTask'][1] = [
+    'model_name'    => 'Index/IndexModel',
+    'method_name' => 'openState',
+    'interval_time' => 1,
+    'max_exec'      => 30,
+    'delay'         => true,
+];
 
-//$config['timerTask'][2] = [
-//    'model_name'    => 'Index/IndexModel',
-//    'method_name'   => 'runTimeClock',
-//    'interval_time' => 1,
-//    'delay'         => true,
-//];
+$config['timerTask'][2] = [
+    'model_name'    => 'Index/IndexModel',
+    'method_name'   => 'runTimeClock',
+    'interval_time' => 2,
+    'delay'         => true,
+];
 
 // $config['timerTask'][2] = [
 //     'model_name' => 'TimeClock/RunTimeClockModel',
