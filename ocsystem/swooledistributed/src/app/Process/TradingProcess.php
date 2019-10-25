@@ -352,6 +352,7 @@ class TradingProcess extends Process
 
         //定义全局变量
         global $del_trading;
+        $lock_time_flag = true;
         if(empty($trading)){
             return returnError('请传入交易内容.');
         }
@@ -364,6 +365,19 @@ class TradingProcess extends Process
             return returnError($purses['Message']);
         }
         $purses = $purses['Data'];
+        if($trading['lockType'] !== 4 || $trading['lockTime'] < 4294967295){
+            //循环查看是否有权限质押交易
+            foreach ($purses as $p_key => $k_val){
+                if($k_val['lockTime'] >= 4294967295){
+                    //有质押就允许执行
+                    $lock_time_flag = false;
+                }
+            }
+        }
+        if($lock_time_flag){
+            return returnError('没有交易权限，请先质押相应的only开启权限。');
+        }
+
 //        $purses = $this->PurseModel->getPurse($address, $purse_trading);
         $this->Using = CatCacheRpcProxy::getRpc()->offsetGet('Using');
 //        if(empty($purses)){
@@ -389,7 +403,6 @@ class TradingProcess extends Process
          * $top_block_height当前最高区块
          * $type 1:正常交易， 2：不验证锁定时间，不进行交易处理，仅做交易可用性验证
          */
-
         array_map(function ($tx, $to) use ($address, &$purses, &$availabler_ecords, $top_block_height, $type)
         {
             //重新声明两个全局变量

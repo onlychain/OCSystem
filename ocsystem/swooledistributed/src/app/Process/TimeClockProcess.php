@@ -116,12 +116,14 @@ class TimeClockProcess extends Process
 //        while (true) {
             if ($this->clockState) {
                 var_dump('当前时间' . $this->clock);
-                if ($this->clock <= 0 || $this->clock == NULL) {
+                if ($this->clock <= 1 || $this->clock == NULL) {
                     //先关闭节点
                     //关闭工作
                     ProcessManager::getInstance()
                                     ->getRpcCall(ConsensusProcess::class)
                                     ->closeConsensus();
+                    //判断是否到
+                    $this->correctTimeClock();
 
                     var_dump('开启新一轮节点更新');
                     var_dump('当前轮次:' . ($this->rounds +1));
@@ -203,6 +205,11 @@ class TimeClockProcess extends Process
 //                sleepCoroutine(1000);
             }
 //        }
+    }
+
+    protected function correctTimeClock()
+    {
+        
     }
 
     /**

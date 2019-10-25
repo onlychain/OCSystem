@@ -571,7 +571,7 @@ class BlockProcess extends Process
         $trading_info = '';
         $count = count($cenesis_trading);
         foreach($cenesis_trading as $ct_key => $ct_val){
-            if($ct_key + 1 < $count){
+            if($ct_key + 2 < $count){
                 $trading_info = $this->TradingEncodeModel->setVin($ct_val['tx'])
                                                         ->setVout($ct_val['to'])
                                                         ->setTime($ct_val['time'])
@@ -672,7 +672,7 @@ class BlockProcess extends Process
         $this->NodeModel->initialization($context);
         //循环插入质押
         foreach ($nodes as $n_key => $n_val){
-            $a = $this->NodeModel->checkNodeRequest($n_val, 2);
+            $this->NodeModel->checkNodeRequest($n_val, 2);
         }
 
         //插入交易数据(最后一笔非质押数据)

@@ -199,8 +199,8 @@ class ConsensusProcess extends Process
     public function coreNode($now_time = 0)
     {
 //        $now_time = CatCacheRpcProxy::getRpc()->offsetGet('topBlockHash');
-//        var_dump($this->Identity);
-//        var_dump($this->openConsensus); && $this->openConsensus
+//        var_dump($this->Identity); && $this->openConsensus
+//        var_dump($this->openConsensus);
         if ($this->Identity == 'core' && $this->openConsensus){
             //获取当前时间钟时间
 //            var_dump('获取时间');
@@ -234,10 +234,13 @@ class ConsensusProcess extends Process
                 $this->incentive(get_instance()->config['address'], $this_time);
                 $page = 1;
                 $pagesize = 20000;
-                $trading_data = ['trading' => 1, '_id' => 1];
+                $trading_where = ['time' => ['$gte' => $this_time - 2]];
+                $trading_data = ['trading' => 1, '_id' => 1, 'time' => -1];
+                var_dump($trading_where);
                 $trading_res = ProcessManager::getInstance()
                                             ->getRpcCall(TradingPoolProcess::class)
                                             ->getTradingPoolList($trading_where, $trading_data, $page, $pagesize);
+
                 if(!$trading_res['IsSuccess']){
 //                    return returnError('数据获取失败!');
                 }

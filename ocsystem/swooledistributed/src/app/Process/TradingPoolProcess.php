@@ -125,6 +125,7 @@ class TradingPoolProcess extends Process
     public function insertTradingPool($trading = [])
     {
         if(empty($trading)) return returnError('交易内容不能为空.');
+        $trading['time'] = time();
         $insert_res = $this->TradingPool->insertOne($trading);
         if(!$insert_res->isAcknowledged()){
             return returnError('插入失败!');
