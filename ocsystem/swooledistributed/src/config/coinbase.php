@@ -82,7 +82,27 @@ $config['coinbase'] = [
         "to"=> [
             [
                 "address"=> "cd639ef9bb4d0cd0bfc506278a48bb9f898d037f",
-                "value"=> 28750000000000000,
+                "value"=> 28749950000000000,
+                "type"=> 1
+            ],
+
+        ],
+        "ins"=> "",
+        "time"=> 1496246400,
+        "lockTime"=> 0,
+        "lockType"=> 1
+    ],
+    [
+        "tx" => [
+            [
+                "n"=> 255,
+                "coinbase"=> "No one breather who is worthier."
+            ]
+        ],
+        "to"=> [
+            [
+                "address"=> "cd639ef9bb4d0cd0bfc506278a48bb9f898d037f",
+                "value"=> 50000000000,
                 "type"=> 1
             ],
 

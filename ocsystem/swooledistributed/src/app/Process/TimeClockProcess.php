@@ -209,7 +209,7 @@ class TimeClockProcess extends Process
 
     protected function correctTimeClock()
     {
-        
+
     }
 
     /**
@@ -244,6 +244,11 @@ class TimeClockProcess extends Process
         $check_res = [];//存储通过共识验证算法的结果
         //获取其他超级节点的时间钟
         $super_clock = [];
+        //从其他超级节点获取数据
+
+        $super_clock = ProcessManager::getInstance()
+                                ->getRpcCall(CoreNetworkProcess::class)
+                                ->sendToSuperNode('time', get_instance()->getNullContext(), 'TimeController', 'getTimeClock');
         //使用共识验证算法进行验证
         $check_res = $this->ConsensusModel->verifyTwoThirds($super_clock['Data']);
         if($check_res['IsSuccess']){

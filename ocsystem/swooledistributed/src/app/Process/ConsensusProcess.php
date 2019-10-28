@@ -132,7 +132,7 @@ class ConsensusProcess extends Process
 //        $this->MongoUrl = 'mongodb://localhost:27017';
 //        $this->MongoDB = new \MongoDB\Client($this->MongoUrl);
 //        $this->Block = $this->MongoDB->selectCollection('blicks', 'block');
-        $context = $this->getNullContext();
+        $context = get_instance()->getNullContext();
         //区块基类相关方法
         $this->BlockBase = new BlockBaseModel();
         $this->BlockBase->initialization($context);
@@ -282,7 +282,7 @@ class ConsensusProcess extends Process
                     $this->ConsensusResult[$black_head['headHash']]['out_time'] = time();
                     $check_block = $this->getBlockMessage($black_head, true);
 
-                    $context = $this->getNullContext();
+                    $context = get_instance()->getNullContext();
 
                     //发起S共识
                     //广播区块数据
@@ -347,7 +347,7 @@ class ConsensusProcess extends Process
                 //广播结果
                 $recheck_block = $this->getBlockMessage($check_block['data'], $check_res);
                 $recheck_block['createder'] = $check_block['createder'];
-                $context = $this->getNullContext();
+                $context = get_instance()->getNullContext();
                 //发起S共识
                 ProcessManager::getInstance()
                             ->getRpcCall(CoreNetworkProcess::class, true)
@@ -388,9 +388,9 @@ class ConsensusProcess extends Process
                                 ->getTradingPoolList($trading_where, $trading_data, $page, $pagesize);
         foreach ($trading_res['Data'] as $tr_key => $tr_val){
             $encode_trading[] = $tr_val['trading'];
-            $tradings[] = $tr_val['_id'];
+//            $tradings[] = $tr_val['_id'];
         }
-
+        $tradings = $this->Block[$check_block['data']['headHash']]['tradingInfo'];
         $insert_block_data = $this->Block[$check_block['data']['headHash']];
         unset($insert_block_data['out_time']);
         unset($insert_block_data['state']);
@@ -414,12 +414,19 @@ class ConsensusProcess extends Process
                         ->setTopBlockHeight($this->Block[$check_block['data']['headHash']]['height']);
             //刷新钱包
             $this->bookedPurse($encode_trading);
+            //广播区块
+            ProcessManager::getInstance()
+                ->getRpcCall(PeerProcess::class, true)
+                ->broadcast(json_encode(['broadcastType' => 'Block', 'Data' => $insert_block_data]));
             //清空被使用的交易缓存
             CatCacheRpcProxy::getRpc()['Using'] = [];
             var_dump("=========================================区块哈希=========================================");
+            var_dump(count($this->ConsensusResult));
+            var_dump(count($this->Block));
             var_dump($this->Block[$check_block['data']['headHash']]['headHash']);
             //休眠1秒
             //清理过期数据
+
             if(!empty($this->ConsensusResult)){
                 foreach ($this->ConsensusResult as $cr_key => $cr_val){
                     if($cr_val['out_time'] + 12 < time())
@@ -620,11 +627,14 @@ class ConsensusProcess extends Process
         $trading['from'] = get_instance()->config['address'];
         $count = $voter_count > 500 ? 500 : $voter_count;
         for($i = 0; $i < $count; ++$i){
-            $trading['to'][$i] = [
-                'address'   =>  $voters[$i]['address'],
-                'value'     =>  floor($tokens * ($voters[$i]['value'] / $total_pledge)),
-                'type'      =>  1,
-            ];
+            if($voters[$i]['value'] >= 1000000000000){
+                $trading['to'][$i] = [
+                    'address'   =>  $voters[$i]['address'],
+                    'value'     =>  floor($tokens * ($voters[$i]['value'] / $total_pledge)),
+                    'type'      =>  1,
+                ];
+            }
+
         }
         //进行序列化
         $tradings[] = $this->TradingEncode->setVin($trading['tx'])
@@ -638,10 +648,14 @@ class ConsensusProcess extends Process
             $trading = [];
             $count = $voter_count > 1000 ? 1000 : $voter_count;
             for($i = 500; $i < $count; ++$i){
-                $trading['to'][$i] = [
-                    'address'   =>  $voters[$i]['address'],
-                    'value'     =>  $tokens,
-                ];
+                if($voters[$i]['value'] >= 1000000000000){
+                    $trading['to'][$i] = [
+                        'address'   =>  $voters[$i]['address'],
+                        'value'     =>  floor($tokens * ($voters[$i]['value'] / $total_pledge)),
+                        'type'      =>  1,
+                    ];
+                }
+
             }
             $tradings[] = $this->TradingEncode->setVin($trading['tx'])
                                                 ->setVout($trading['to'])
