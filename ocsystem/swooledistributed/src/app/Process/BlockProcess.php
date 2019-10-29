@@ -646,7 +646,7 @@ class BlockProcess extends Process
                     ->deletePurseMany(['txId' => ['$in' => $black_head['tradingInfo']]]);
         //删除质押节点
         ProcessManager::getInstance()
-                    ->getRpcCall(NodeProcess::class, true)
+                    ->getRpcCall(NodeProcess::class)
                     ->deleteNodePoolMany();
         //开启区块同步
         $this->setBlockState(1);
