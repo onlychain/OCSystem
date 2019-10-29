@@ -187,7 +187,7 @@ class IndexModel extends Model
     {
         $time = date('Y-m-d-H-i-s', time());
         $time = explode('-', $time);
-        var_dump('当前时间' . $time[5]);
+        var_dump('当前秒针' . $time[5]);
         if($time[5] == '30' || $time[5] == '00'){
             var_dump('开启状态');
             ProcessManager::getInstance()

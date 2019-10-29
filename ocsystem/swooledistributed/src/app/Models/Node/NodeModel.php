@@ -194,8 +194,8 @@ class NodeModel extends Model
         if($type == 1){
             //验证交易是否可用
             $check_trading_res = ProcessManager::getInstance()
-                ->getRpcCall(TradingProcess::class)
-                ->checkTrading($decode_trading, $node_data['pledge']['address']);
+                                            ->getRpcCall(TradingProcess::class)
+                                            ->checkTrading($decode_trading, $node_data['pledge']['address']);
             if(!$check_trading_res['IsSuccess']){
                 return returnError($check_trading_res['Message'], $check_trading_res['Code']);
             }

@@ -235,7 +235,7 @@ class TradingModel extends Model
         //反序列化交易
         $decode_trading = $this->TradingEncodeModel->decodeTrading($trading_data['trading']);
         //判断是否是coinbase交易
-        if(!empty($decode_trading['vin']['coinbase'])){
+        if(!empty($decode_trading['vin'][0]['coinbase'])){
             if($type == 2){
                 //同步到coinbase交易处理
                 $this->delSycnCoinbase($trading_data['trading']);
@@ -244,7 +244,7 @@ class TradingModel extends Model
             return returnError('交易有误，不能提交coinbase交易.');
         }
         //空着等对接
-        if($trading_data['renoce'] != ''){
+        if(!empty($trading_data['renoce']) || $trading_data['renoce'] != ''){
             //判断交易质押类型是否可以撤销
             if(in_array($decode_trading['lockType'],[2,3,4])){
                 return returnError('该交易无法重置.');

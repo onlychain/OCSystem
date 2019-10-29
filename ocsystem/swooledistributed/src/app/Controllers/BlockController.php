@@ -27,11 +27,10 @@ class BlockController extends Controller
      */
     public function tcp_checkBlock($block)
     {
-        var_dump($block);
+        var_dump(52222);
         if(empty($block)){
             return $this->send(0);
         }
-        var_dump($block);
         //验证函数
         $block_res = ProcessManager::getInstance()
                                 ->getRpcCall(ConsensusProcess::class)

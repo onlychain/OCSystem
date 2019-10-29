@@ -207,7 +207,7 @@ class NodeController extends Controller
 
     public function tcp_superConsensus($param)
     {
-        var_dump('收到');
+        var_dump('收到超级节点数据');
         ProcessManager::getInstance()
                     ->getRpcCall(ConsensusProcess::class)
                     ->superCheckBlock($param);
