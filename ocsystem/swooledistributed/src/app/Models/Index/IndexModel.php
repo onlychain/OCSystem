@@ -75,7 +75,7 @@ class IndexModel extends Model
 //        $identity = ProcessManager::getInstance()
 //                            ->getRpcCall(ConsensusProcess::class, true)
 //                            ->coreNode();
-        return;
+//        return;
 
         //验证数据是否同步完成
         /**

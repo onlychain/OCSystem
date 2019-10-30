@@ -330,6 +330,7 @@ class PeerProcess extends Process
     public function getBroadcast($sender, $TTL, $content)
     {
         $context = getNullContext();
+        var_dump($content);
         //反序列化数据
         $res = [];//验证返回结果
         $decode_content = json_decode($content, true);
@@ -358,7 +359,7 @@ class PeerProcess extends Process
         }
         var_dump($res);
         if($res['IsSuccess']){
-            $this->broadcast($content);
+//            $this->broadcast($content);
         }
         //一切都ok之后，广播数据
 
