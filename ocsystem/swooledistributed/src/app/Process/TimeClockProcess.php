@@ -116,7 +116,7 @@ class TimeClockProcess extends Process
 //        while (true) {
             if ($this->clockState) {
                 var_dump('当前时间' . $this->clock);
-                if ($this->clock <= 1 || $this->clock == NULL) {
+                if ($this->clock <= 0 || $this->clock == NULL) {
                     //先关闭节点
                     //关闭工作
                     ProcessManager::getInstance()
@@ -127,7 +127,7 @@ class TimeClockProcess extends Process
 
                     var_dump('开启新一轮节点更新');
                     var_dump('当前轮次:' . ($this->rounds +1));
-                    $this->clock = 125;
+                    $this->clock = 126;
                     ++$this->rounds;
                     /**
                      * 更新备选超级节点数据
@@ -198,7 +198,7 @@ class TimeClockProcess extends Process
                 ProcessManager::getInstance()
                     ->getRpcCall(ConsensusProcess::class, true)
                     ->chooseWork($this->clock);
-                $this->clock = $this->clock - 2;
+                $this->clock = $this->clock - 1;
 
 
                 //一秒确认一次
@@ -248,7 +248,7 @@ class TimeClockProcess extends Process
 
         $super_clock = ProcessManager::getInstance()
                                 ->getRpcCall(CoreNetworkProcess::class)
-                                ->sendToSuperNode('time', get_instance()->getNullContext(), 'TimeController', 'getTimeClock');
+                                ->sendToSuperNode('time', getNullContext(), 'TimeController', 'getTimeClock');
         //使用共识验证算法进行验证
         $check_res = $this->ConsensusModel->verifyTwoThirds($super_clock['Data']);
         if($check_res['IsSuccess']){

@@ -147,7 +147,6 @@ class PeerProcess extends Process
     public function p2pGetVal($key = '', $data = [])
     {
         var_dump('发送');
-        var_dump($data);
 		p2p_get($key, $data, function ($values) use($key) {
 		    var_dump('接收回调数据');
             $kes = explode('-', $key);
@@ -172,23 +171,11 @@ class PeerProcess extends Process
     }
 
     /**
-     * 接收数据回调
-     * @param $value
-     */
-    public function getValCallBack($value)
-    {
-        var_dump('收到数据');
-        var_dump($value);
-
-    }
-
-    /**
      * 获取连接的节点列表
      * @return mixed
      */
     public function getNodes()
     {
-		var_dump('return empty nodes');
 		return p2p_nodes();
     }
 
@@ -333,7 +320,6 @@ class PeerProcess extends Process
 
 
         var_dump('发送val');
-        var_dump($result);
         return $result;
     }
 
@@ -343,17 +329,11 @@ class PeerProcess extends Process
      */
     public function getBroadcast($sender, $TTL, $content)
     {
-        var_dump('收到广播数据：'.$content);
-        $context = [
-            "start_time" => date('Y-m-d H:i:s'),
-            'request_id'    => time() . crc32('null_controller' . 'null_method' . getTickTime() . rand(1, 10000000)),
-            'controller_name'   => 'null_controller',
-            'method_name'   => 'null_method',
-            'ip'        =>  get_instance()->config['node']["ip"],
-        ];
+        $context = getNullContext();
         //反序列化数据
         $res = [];//验证返回结果
         $decode_content = json_decode($content, true);
+        var_dump('收到广播数据广播类型：'.$decode_content['broadcastType']);
         //根据具体的广播数据进行处理，不合法就不再进行广播
         switch ($decode_content['broadcastType']){
             case 'Block' :
@@ -376,11 +356,12 @@ class PeerProcess extends Process
                 return false;
                 break;
         }
-        if(!$res['IsSuccess']){
-            return false;
+        var_dump($res);
+        if($res['IsSuccess']){
+            $this->broadcast($content);
         }
         //一切都ok之后，广播数据
-        $this->broadcast($content);
+
     }
 
     /**
@@ -389,8 +370,7 @@ class PeerProcess extends Process
      */
     public function broadcast(string $content = '')
     {
-        var_dump($this->getNodes());
-        var_dump('广播');
+        var_dump('发送广播');
         p2p_broadcast($content);
     }
 
