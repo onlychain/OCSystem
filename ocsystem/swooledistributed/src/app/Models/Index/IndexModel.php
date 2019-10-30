@@ -31,6 +31,12 @@ class IndexModel extends Model
      */
     public $threshold = 1;
 
+    /**
+     * 是否检查过区块
+     * @var bool
+     */
+    private $checkState = false;
+
 
     /**
      * 初始化函数，每次启动都要执行，用来开启项目进程
@@ -39,14 +45,17 @@ class IndexModel extends Model
     public function index()
     {
         var_dump('==================初始函数==================');
-        //判断创世区块是否存在，不存在则插入
-        $genesis_block = ProcessManager::getInstance()
-                                        ->getRpcCall(BlockProcess::class)
-                                        ->checkGenesisBlock();
-        //定期循环检查
-
-
-
+        if(!$this->checkState){
+            //判断创世区块是否存在，不存在则插入
+            $genesis_block = ProcessManager::getInstance()
+                                            ->getRpcCall(BlockProcess::class)
+                                            ->checkGenesisBlock();
+            if ($genesis_block['IsSuccess']){
+                $this->checkState = true;
+            }
+        }
+        //定期循环检查同步区块
+        return;
 
 
 
@@ -183,23 +192,28 @@ class IndexModel extends Model
         return true;
     }
 
+    /**
+     * 创世区块使用，判断是否要启动节点
+     */
     public function openState()
     {
         $time = date('Y-m-d-H-i-s', time());
         $time = explode('-', $time);
         var_dump('当前秒针' . $time[5]);
-        if($time[5] == '30' || $time[5] == '00'){
-            var_dump('开启状态');
-            ProcessManager::getInstance()
-                ->getRpcCall(TimeClockProcess::class, true)
-                ->openClock();
-//            ProcessManager::getInstance()
-//                ->getRpcCall(ConsensusProcess::class, true)
-//                ->openConsensus();
-//            var_dump('出块');
-//            ProcessManager::getInstance()
-//                ->getRpcCall(ConsensusProcess::class, true)
-//                ->coreNode();
+        if($time[5] == '00' || $time[5] == '30'){
+
+            $clock_time = ProcessManager::getInstance()
+                                ->getRpcCall(TimeClockProcess::class)
+                                ->getClockState();
+            $top_clock_height = ProcessManager::getInstance()
+                                            ->getRpcCall(BlockProcess::class)
+                                            ->getTopBlockHeight();
+            if(!$clock_time && $top_clock_height < 10){
+                var_dump('初始节点,开启时间钟');
+                ProcessManager::getInstance()
+                                ->getRpcCall(TimeClockProcess::class, true)
+                                ->delClock(0);
+            }
         }
     }
 }

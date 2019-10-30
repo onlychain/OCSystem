@@ -15,6 +15,7 @@ use Server\CoreBase\SwooleException;
 use Server\Components\CatCache\TimerCallBack;
 use Server\Components\CatCache\CatCacheRpcProxy;
 //自定义进程
+use app\Process\PeerProcess;
 use app\Process\NodeProcess;
 use app\Process\BlockProcess;
 use app\Process\TradingProcess;
@@ -165,7 +166,7 @@ class NodeModel extends Model
      * @param array $node_data
      * @return bool
      */
-    public function checkNodeRequest(array $node_data = [], $type = 1)
+    public function checkNodeRequest(array $node_data = [], $type = 1, $is_broadcast = 1)
     {
         $node_res = [];//投票操作结果
         $check_node = [];//需要验证的投票数据
@@ -214,6 +215,11 @@ class NodeModel extends Model
         $node_res = $this->submitNode($check_node);
         if(!$node_res['IsSuccess']){
             return returnError($node_res['Message']);
+        }
+        if($is_broadcast == 2){
+            ProcessManager::getInstance()
+                ->getRpcCall(PeerProcess::class, true)
+                ->broadcast(json_encode(['broadcastType' => 'Pledge', 'Data' => $node_data]));
         }
         return returnSuccess();
     }

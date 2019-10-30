@@ -17,6 +17,7 @@ use Server\Components\CatCache\TimerCallBack;
 use Server\Components\CatCache\CatCacheRpcProxy;
 //自定义进程
 use app\Process\BlockProcess;
+use app\Process\PeerProcess;
 use app\Process\TradingProcess;
 use app\Process\PurseProcess;
 use app\Process\TradingPoolProcess;
@@ -72,8 +73,9 @@ class BlockBaseModel extends Model
      * @param array $block_head
      * @return bool
      */
-    public function checkBlockRequest(array $block_head = [], $trading_type = 1)
+    public function checkBlockRequest(array $block_head = [], $trading_type = 1, $is_broadcast = 1)
     {
+
         var_dump($block_head);
         //验证上一个区块的哈希是否存在
         $block_where = ['headHash' => ['$in' => [$block_head['parentHash'], $block_head['headHash']]]];
@@ -82,11 +84,13 @@ class BlockBaseModel extends Model
                                     ->getRpcCall(BlockProcess::class)
                                     ->getBloclHeadList($block_where, $block_data, 1, 2, ['height' => 1]);
         var_dump(1);
+        var_dump($block_res);
         if(empty($block_res['Data'])){
             var_dump(2);
             //判断数据库是否有区块数据
             $check_res = $this->checkBlockSync($block_head);
             var_dump(3);
+            var_dump($check_res);
             if(!$check_res['IsSuccess']){
                 return returnError('区块同步中.');
             }
@@ -106,6 +110,8 @@ class BlockBaseModel extends Model
             $block_res['Data'][1]['headHash'] != $block_head['headHash']){
             var_dump(7);
             return returnError('区块数据有误');
+        }else{
+            return;
         }
         var_dump(8);
         //验证交易是否都存在
@@ -146,6 +152,11 @@ class BlockBaseModel extends Model
         if($check_head['headHash'] !== $block_head['headHash']){
             return returnError('区块验证不通过!');
         }
+        if ($is_broadcast != 2){
+            ProcessManager::getInstance()
+                ->getRpcCall(PeerProcess::class, true)
+                ->broadcast(json_encode(['broadcastType' => 'Block', 'Data' => $block_head]));
+        }
         return returnSuccess($check_head);
     }
 
@@ -156,39 +167,38 @@ class BlockBaseModel extends Model
      */
     public function checkBlockSync(array $block = [])
     {
-        $block_res = ProcessManager::getInstance()
-                                ->getRpcCall(BlockProcess::class)
-                                ->getBlockHeadInfo([], []);
-        $this_top_height = ProcessManager::getInstance()
+        $block_state = ProcessManager::getInstance()
+                                    ->getRpcCall(BlockProcess::class)
+                                    ->getBlockState();
+        if($block_state === 3){
+            //区块未同步结束
+            $block_res = ProcessManager::getInstance()
+                                    ->getRpcCall(BlockProcess::class)
+                                    ->getBlockHeadInfo([], []);
+            $this_top_height = ProcessManager::getInstance()
                                     ->getRpcCall(BlockProcess::class)
                                     ->getTopBlockHeight();
-        if(empty($block_res['Data']) || ($this_top_height - $block['height']) >= 10){
-            //数据库中没有数据
-            $block_state = ProcessManager::getInstance()
-                                        ->getRpcCall(BlockProcess::class)
-                                        ->getBlockState();
-            if($block_state == 3){
+            if(empty($block_res['Data']) || ($block['height'] - $this_top_height) >= 2){
                 ProcessManager::getInstance()
-                            ->getRpcCall(BlockProcess::class, true)
-                            ->setBlockState(1);
+                                ->getRpcCall(BlockProcess::class, true)
+                                ->setBlockState(1);
                 ProcessManager::getInstance()
-                            ->getRpcCall(TradingProcess::class, true)
-                            ->setTradingState(1);
+                                ->getRpcCall(TradingProcess::class, true)
+                                ->setTradingState(1);
                 ProcessManager::getInstance()
-                            ->getRpcCall(PurseProcess::class, true)
-                            ->setPurseState(1);
+                                ->getRpcCall(PurseProcess::class, true)
+                                ->setPurseState(1);
             }
-            //把当前块的高度存入进程
-            ProcessManager::getInstance()
-                        ->getRpcCall(BlockProcess::class, true)
-                        ->setSyncBlockTopHeight($block['height']);
-            //把当前区块存入数据库
-            ProcessManager::getInstance()
-                            ->getRpcCall(BlockProcess::class, true)
-                            ->insertBloclHead($block);
-            return returnError('区块未同步');
         }
-        return returnSuccess();
+        //把当前块的高度存入进程
+        ProcessManager::getInstance()
+                    ->getRpcCall(BlockProcess::class, true)
+                    ->setSyncBlockTopHeight($block['height']);
+        //把当前区块存入数据库
+        ProcessManager::getInstance()
+                        ->getRpcCall(BlockProcess::class, true)
+                        ->insertBloclHead($block);
+        return returnError('区块未同步');
     }
 
 
