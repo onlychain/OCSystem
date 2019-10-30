@@ -26,11 +26,6 @@ use Server\Components\Process\ProcessManager;
 class TimeClockProcess extends Process
 {
 
-    /**
-     * 时间钟
-     * @var int
-     */
-    private $clock = 0;
 
     /**
      * 时间钟差值
@@ -44,12 +39,12 @@ class TimeClockProcess extends Process
      */
     private $clockState = false;
 
+
     /**
-     * 打包轮次
+     * 出块轮次
      * @var int
      */
     private $rounds = 0;
-
     /**
      * 共识验证算法模型
      * @var
@@ -66,7 +61,6 @@ class TimeClockProcess extends Process
         $this->clock = 0;//初始化时间钟
         $this->clockState = false;//时间钟状态
         $this->ConsensusModel = new ConsensusModel();//实例化共识模型
-//        $this->runTimeClock();
     }
 
     /**
@@ -75,18 +69,8 @@ class TimeClockProcess extends Process
      */
     public function getTimeClock() : int
     {
-//        return $this->clock;
         return ceil(getTickTime() / 1000) - $this->getDifference() % 126;
 
-    }
-
-    /**
-     * 设置当前时间钟
-     * @param int $time
-     */
-    public function setTimeClock(int $time = 125)
-    {
-        $this->clock = $time;
     }
 
     /**
@@ -106,12 +90,21 @@ class TimeClockProcess extends Process
     }
 
     /**
-     * 设置区块轮次
-     * @param int $round
+     * 获取当前时间钟状态
+     * @return bool
      */
-    public function setRounds(int $round = 1)
+    public function getClockState() :bool
     {
-        $this->rounds = $round;
+        return $this->clockState;
+    }
+
+    /**
+     * 获取区块轮次
+     * @return int
+     */
+    public function setRounds(int $rounds)
+    {
+        $this->rounds = $rounds;
     }
 
     /**
@@ -121,6 +114,15 @@ class TimeClockProcess extends Process
     public function getRounds() : int
     {
         return $this->rounds;
+    }
+
+    /**
+     * 获取创始时间(项目运行至今的秒数)
+     * @return int
+     */
+    public function getCreationTime() :int
+    {
+        return $this->getRounds() * 126 + ceil(getTickTime() / 1000) + $this->getDifference();
     }
 
     /**
@@ -146,31 +148,27 @@ class TimeClockProcess extends Process
      * @oneWay
      */
     public function runTimeClock()
-    {//
-//        while (true) {
+    {
+        var_dump($this->clockState);
             if ($this->clockState) {
-//                var_dump('当前时间' . $this->clock);
-                var_dump('当前时间'.ceil(getTickTime() / 1000) - $this->getDifference() % 126);
-//                if ($this->clock <= 0) {
+                var_dump(111);
+                var_dump('当前时间'.(ceil(getTickTime() / 1000) - $this->getDifference()) % 126);
                 if (ceil(getTickTime() / 1000) - $this->getDifference() % 126 <= 0){
                     //先关闭节点
                     //关闭工作
                     ProcessManager::getInstance()
                                     ->getRpcCall(ConsensusProcess::class)
                                     ->closeConsensus();
-                    //判断是否到
-                    $this->correctTimeClock();
 
                     var_dump('开启新一轮节点更新');
                     var_dump('当前轮次:' . ($this->rounds +1));
-                    $this->clock = 126;
                     ++$this->rounds;
                     /**
                      * 更新备选超级节点数据
                      */
                     $examination_res = ProcessManager::getInstance()
-                        ->getRpcCall(NodeProcess::class)
-                        ->examinationNode();
+                                        ->getRpcCall(NodeProcess::class)
+                                        ->examinationNode();
                     if (!$examination_res['IsSuccess']) {
                         return;
 //                        continue;
@@ -225,28 +223,15 @@ class TimeClockProcess extends Process
                             ->openConsensus();
                     }
 
-//                    ProcessManager::getInstance()
-//                        ->getRpcCall(ConsensusProcess::class, true)
-//                        ->chooseWork($this->clock);
                     var_dump('round change over.');
-//                    return;
                 }
                 ProcessManager::getInstance()
                     ->getRpcCall(ConsensusProcess::class, true)
-                    ->chooseWork(ceil(getTickTime() / 1000) - $this->getDifference() % 126 );
-//                $this->clock = $this->clock - 1;
-
-
-                //一秒确认一次
-//                sleepCoroutine(1000);
+                    ->chooseWork(ceil(getTickTime() / 1000) - $this->getDifference() % 126);
+                var_dump(ceil(getTickTime() / 1000) - $this->getDifference() % 126);
             }
-//        }
     }
 
-    protected function correctTimeClock()
-    {
-
-    }
 
     /**
      * 运行时间钟
@@ -311,20 +296,21 @@ class TimeClockProcess extends Process
      * @param int $round
      * @return bool
      */
-    public function delClock($time = 0, $round = 0)
+    public function delClock($time = 0)
     {
-        if(!$this->clockState){
+        if($this->clockState){
             return returnError('时间钟已同步完成.');
         }
-        if($time == 0 || $round == 0){
-            return returnError('同步时间有误');
-        }
-        $systime = getTickTime() / 1000;
-        $work_time = $time - ($round * 126);
+//        if($time == 0){
+//            return returnError('同步时间有误');
+//        }
+        $systime = ceil(getTickTime() / 1000);
+        $work_time = $time == 0 ? ($time % 126) - 1 : $time % 126;
+        $round = ceil($time / 126) + 1;
         //设置时间钟差值
         $this->setDifference($systime - $work_time);
         //设置当前轮次
-        $this->setRounds($round);
+        var_dump((ceil(getTickTime() / 1000) - $this->getDifference()) % 126);
         //开启时间钟
         $this->openClock();
     }

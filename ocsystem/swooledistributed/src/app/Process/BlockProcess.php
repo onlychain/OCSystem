@@ -81,14 +81,13 @@ class BlockProcess extends Process
      * 同步区块的高度
      * @var int
      */
-    private $SyncBlockTopHeight = 548;
+    private $SyncBlockTopHeight = 1;
 
     /**
      * 当前区块哈希
      * @var string
      */
-    private $BlockTopHash = 'fff79950887009985ab18c906abba11e22237b5582fee34e04756336bea0b6de';
-    //'0000000000000000000000000000000000000000000000000000000000000000';
+    private $BlockTopHash = '0000000000000000000000000000000000000000000000000000000000000000';
 
     /**
      * 每次获取区块的数量
@@ -100,7 +99,7 @@ class BlockProcess extends Process
      * 获取区块的游码
      * @var int
      */
-    private $Limit = 12;
+    private $Limit = 0;
 
     /**
      * 初始化函数

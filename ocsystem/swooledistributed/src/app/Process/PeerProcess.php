@@ -339,28 +339,31 @@ class PeerProcess extends Process
         switch ($decode_content['broadcastType']){
             case 'Block' :
                 $this->BlockModel->initialization($context);
-                $res = $this->BlockModel->checkBlockRequest($decode_content['Data']);
+                $res = $this->BlockModel->checkBlockRequest($decode_content['Data'], 1, 2);
                 break;
             case 'Trading' :
                 $this->TradingModel->initialization($context);
-                $res = $this->TradingModel->checkTradingRequest($decode_content['Data'], 2);
+                $res = $this->TradingModel->checkTradingRequest($decode_content['Data'], 2, 2);
                 break;
             case 'Vote' :
                 $this->VoteModel->initialization($context);
-                $res = $this->VoteModel->checkVoteRequest($decode_content['Data']);
+                $res = $this->VoteModel->checkVoteRequest($decode_content['Data'], 2);
                 break;
             case 'Pledge' :
                 $this->NodeModel->initialization($context);
-                $res = $this->NodeModel->checkNodeRequest($decode_content['Data']);
+                $res = $this->NodeModel->checkNodeRequest($decode_content['Data'], 1, 2);
                 break;
             default :
                 return false;
                 break;
         }
-        var_dump($res);
-        if($res['IsSuccess']){
-//            $this->broadcast($content);
-        }
+//        if($res['IsSuccess']){
+//            go(function() use ($content){
+//                var_dump('发送广播');
+//                p2p_broadcast($content);
+//            });
+//
+//        }
         //一切都ok之后，广播数据
 
     }

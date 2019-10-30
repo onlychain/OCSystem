@@ -82,13 +82,13 @@ class TradingProcess extends Process
      * 区块游码，每次只获取一个块的交易数据
      * @var int
      */
-    private $BlockIndex = 478;
+    private $BlockIndex = 1;
 
     /**
      * 同步时的最高区块
      * @var int
      */
-    private $TopBlockHigh = 548;
+    private $TopBlockHigh = 1;
 
     /**
      * 初始化函数
@@ -353,19 +353,13 @@ class TradingProcess extends Process
         //定义全局变量
         global $del_trading;
         $lock_time_flag = true;
-        if(empty($trading)){
-            return returnError('请传入交易内容.');
-        }
-        //获取缓存的utxo
-        $purse_trading = [
-            'txId'  =>  $trading['txId'],
-        ];
+        $vin = $trading['vin'] ?? [];
         $purses = $this->getAvailableTrading($address, $trading['vin']);
         if(!$purses['IsSuccess']){
             return returnError($purses['Message']);
         }
         $purses = $purses['Data'];
-        if($trading['lockType'] !== 4 || $trading['lockTime'] < 4294967295){
+        if(empty($trading) && ($trading['lockType'] !== 4 || $trading['lockTime'] < 4294967295)){
             //循环查看是否有权限质押交易
             foreach ($purses as $p_key => $k_val){
                 if($k_val['lockTime'] >= 4294967295){
@@ -374,16 +368,15 @@ class TradingProcess extends Process
                 }
             }
         }
+        //判断是否有交易权限
         if($lock_time_flag){
             return returnError('没有交易权限，请先质押相应的only开启权限。');
         }
-
-//        $purses = $this->PurseModel->getPurse($address, $purse_trading);
+        //没有交易输入，不再往下运行代码
+        if(empty($trading)){
+            return returnSuccess([], '有交易权限，请引入交易输入.');
+        }
         $this->Using = CatCacheRpcProxy::getRpc()->offsetGet('Using');
-//        if(empty($purses)){
-//            $purses = $this->overloadPurse()['Data'];
-//            $overload = false;
-//        }
         //获取最新的区块高度
         $top_block_height = ProcessManager::getInstance()
                                         ->getRpcCall(BlockProcess::class)
@@ -491,9 +484,12 @@ class TradingProcess extends Process
     {
         //先从缓存中获取数据
         $txids = [];//存储需要的tx
-        foreach ($vin as $v_key => $v_val){
-            $txids[] = $v_val['txId'];
+        if(!empty($vin)){
+            foreach ($vin as $v_key => $v_val){
+                $txids[] = $v_val['txId'];
+            }
         }
+
         $purses = $this->PurseModel->getPurse($address, $txids);
         if($purses == false){
             return returnError('交易输出不存在，请刷新钱包.');

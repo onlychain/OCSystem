@@ -17,6 +17,7 @@ use Server\Components\CatCache\CatCacheRpcProxy;
 //自定义进程
 
 use app\Process\BlockProcess;
+use app\Process\PeerProcess;
 use app\Process\TradingProcess;
 use app\Process\TradingPoolProcess;
 use Server\Components\Process\ProcessManager;
@@ -222,7 +223,7 @@ class TradingModel extends Model
      * @param array $trading_data
      * @return bool
      */
-    public function checkTradingRequest(array $trading_data = [], $type = 1)
+    public function checkTradingRequest(array $trading_data = [], $type = 1, $is_broadcast = 1)
     {
         //做交易所有权验证
 //        $validation = $this->Validation->varifySign($trading_data);
@@ -277,6 +278,11 @@ class TradingModel extends Model
         $insert_res = $this->createTradingEecode($trading_data);
         if(!$insert_res['IsSuccess']){
             return returnError($insert_res['Message'], $insert_res['Code']);
+        }
+        if($is_broadcast == 2){
+            ProcessManager::getInstance()
+                ->getRpcCall(PeerProcess::class, true)
+                ->broadcast(json_encode(['broadcastType' => 'Trading', 'Data' => $trading_data]));
         }
         return returnSuccess();
     }
