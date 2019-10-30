@@ -53,4 +53,4 @@ To Be Advised Later
 
 
 ## NOTES
-Please refer to the copyright and license terms [LICENSE](./LICENSE)。
+Please refer to the copyright and license terms [LICENSE](./LICENSE)
