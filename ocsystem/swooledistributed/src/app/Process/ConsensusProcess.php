@@ -448,16 +448,16 @@ class ConsensusProcess extends Process
             }
             var_dump(date('Y-m-d H:i:s', time()));
             var_dump("=========================================区块确认结束=========================================");
-            //广播区块
-            ProcessManager::getInstance()
-                        ->getRpcCall(PeerProcess::class, true)
-                        ->broadcast(json_encode(['broadcastType' => 'Block', 'Data' => $insert_block_data]));
             //广播激励交易
             foreach ($incentive_deals as $id_key => $id_val){
                 ProcessManager::getInstance()
                             ->getRpcCall(PeerProcess::class, true)
                             ->broadcast(json_encode(['broadcastType' => 'Trading', 'Data' => ['trading' => $id_val]]));
             }
+            //广播区块
+            ProcessManager::getInstance()
+                ->getRpcCall(PeerProcess::class, true)
+                ->broadcast(json_encode(['broadcastType' => 'Block', 'Data' => $insert_block_data]));
 
         }else{
             var_dump('交易删除失败!');

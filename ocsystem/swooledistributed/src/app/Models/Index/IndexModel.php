@@ -54,13 +54,8 @@ class IndexModel extends Model
                 $this->checkState = true;
             }
         }
+//        return;
         //定期循环检查同步区块
-        return;
-
-
-
-
-
         //验证区块数据是否同步完成
 
         //验证时间钟是否同步
@@ -107,7 +102,6 @@ class IndexModel extends Model
             var_dump('区块同步未完成');
             return;
         }
-
         /**
          * ============================================同步交易数据============================================
          */
@@ -144,7 +138,7 @@ class IndexModel extends Model
                                         ->getRpcCall(PurseProcess::class, true)
                                         ->syncPurse();
             return;
-        }elseif($purse_state == 2){
+        }elseif($purse_state != 3){
             //交易同步中，未同步完成，等待同步结束
             var_dump('钱包同步未完成');
             return;

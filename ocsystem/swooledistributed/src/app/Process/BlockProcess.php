@@ -99,7 +99,7 @@ class BlockProcess extends Process
      * 获取区块的游码
      * @var int
      */
-    private $Limit = 0;
+    private $Limit = 1;
 
     /**
      * 初始化函数
@@ -443,6 +443,7 @@ class BlockProcess extends Process
         $flag = false;//判断是否要同步数据
         $this->setBlockState(2);
         //从别的节点获取最高的区块高度,同步验证至这一高度
+        var_dump($this->SyncBlockTopHeight);
         if($this->SyncBlockTopHeight == 0){
             return returnError('等待获取高度.');
         }
@@ -506,10 +507,15 @@ class BlockProcess extends Process
             var_dump('执行回调');
             //请求区块数据
             $block_key = '';
-            $block_key = 'Block-' . (($this->Limit - 1) * $this->Pagesize + 1) . '-' . ($this->Pagesize * $this->Limit);
+            $begin = ($this->Limit - 1) * $this->Pagesize + 1;
+            $end = $this->Pagesize * $this->Limit;
+            if($begin == 1){
+                $begin = 2;
+            }
+            $block_key = 'Block-' . $begin . '-' . $end;
             ProcessManager::getInstance()
                             ->getRpcCall(PeerProcess::class, true)
-                            ->p2pgetVal($block_key, []);
+                            ->p2pGetVal($block_key, []);
             return returnSuccess('等待请求数据回调.');
         }
         //区块同步完毕

@@ -75,8 +75,13 @@ class BlockBaseModel extends Model
      */
     public function checkBlockRequest(array $block_head = [], $trading_type = 1, $is_broadcast = 1)
     {
-
         var_dump($block_head);
+        //判断区块状态,决定是否要同步数据
+        $check_block_state = $this->getBlockSituation($block_head);
+        if (!$check_block_state['IsSuccess']){
+            var_dump($check_block_state);
+            return returnError($check_block_state['Message']);
+        }
         //验证上一个区块的哈希是否存在
         $block_where = ['headHash' => ['$in' => [$block_head['parentHash'], $block_head['headHash']]]];
         $block_data = ['headHash' => 1, 'parentHash' => 1];
@@ -86,16 +91,20 @@ class BlockBaseModel extends Model
         var_dump(1);
         var_dump($block_res);
         if(empty($block_res['Data'])){
-            var_dump(2);
-            //判断数据库是否有区块数据
-            $check_res = $this->checkBlockSync($block_head);
-            var_dump(3);
-            var_dump($check_res);
-            if(!$check_res['IsSuccess']){
-                return returnError('区块同步中.');
-            }
-            var_dump(4);
-            return returnError('数据缺失.');
+            var_dump('区块数据有误，请重启系统进行同步.');
+            return returnError('区块数据有误，请重启.');
+//            var_dump(2);
+//            //判断数据库是否有区块数据
+//            $check_res = $this->checkBlockSync($block_head);
+//            var_dump(3);
+//            var_dump($check_res);
+//            if(!$check_res['IsSuccess']){
+//                return returnError('区块同步中.');
+//            }
+//            var_dump(4);
+//            return returnError('数据缺失.');
+        }elseif (count($block_res['Data']) == 1 && $block_res['Data'][0]['headHash'] == $block_head['headHash']){
+            return returnError('区块有误，需要重新同步区块.');
         }elseif (count($block_res['Data']) == 1 && $block_res['Data'][0]['headHash'] == $block_head['parentHash']){
             var_dump(5);
             //正常执行逻辑
@@ -150,6 +159,7 @@ class BlockBaseModel extends Model
                                         ->setVersion($block_head['version'])
                                         ->packBlockHead();
         if($check_head['headHash'] !== $block_head['headHash']){
+            var_dump();
             return returnError('区块验证不通过!');
         }
         if ($is_broadcast != 2){
@@ -199,6 +209,33 @@ class BlockBaseModel extends Model
                         ->getRpcCall(BlockProcess::class, true)
                         ->insertBloclHead($block);
         return returnError('区块未同步');
+    }
+
+    /**
+     * 判断是否在同步区块
+     * @param array $block
+     */
+    public function getBlockSituation(array $block = [])
+    {
+        //获取同步的区块高度
+        $sync_block_top_height = ProcessManager::getInstance()
+                                            ->getRpcCall(BlockProcess::class)
+                                            ->getSyncBlockTopHeight();
+        var_dump($sync_block_top_height);
+        //获取同步状态
+        $block_state = ProcessManager::getInstance()
+                                    ->getRpcCall(BlockProcess::class)
+                                    ->getBlockState();
+        if($block_state == 1 || $block_state == 2){
+            if($sync_block_top_height < $block['height']){
+                //把当前块的高度存入进程
+                ProcessManager::getInstance()
+                    ->getRpcCall(BlockProcess::class, true)
+                    ->setSyncBlockTopHeight($block['height']);
+            }
+            return returnError('区块同步中');
+        }
+        return returnSuccess();
     }
 
 
