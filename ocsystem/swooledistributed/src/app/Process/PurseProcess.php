@@ -239,7 +239,7 @@ class PurseProcess extends Process
     {
 
         $this->setPurseState(2);
-        $block_index = 10;//区块页码
+        $block_index = 1;//区块页码
         $block_size = 50;//每次处理50个区块
         $flag = true;//是否继续同步
         //获取交易

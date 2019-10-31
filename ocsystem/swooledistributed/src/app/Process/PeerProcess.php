@@ -228,7 +228,7 @@ class PeerProcess extends Process
                 $data = ['headHash' => 1, '_id' => 0];
                 $result = ProcessManager::getInstance()
                                         ->getRpcCall(BlockProcess::class)
-                                        ->getBloclHeadList($where, $data, 1, $kes[2] - $kes[1] + 1);
+                                        ->getBloclHeadList($where, $data, 1, intval($kes[2]) - intval($kes[1]) + 1);
                 if(!empty($result['Data'])){
                     foreach ($result['Data'] as $r_key => $r_val){
                         $result_to_val[] = $r_val['headHash'];
@@ -254,7 +254,7 @@ class PeerProcess extends Process
                 $data = ['txId' => 1];
                 $result = ProcessManager::getInstance()
                                         ->getRpcCall(PurseProcess::class)
-                                        ->getPurseList($where, $data, 1, $kes[2]);
+                                        ->getPurseList($where, $data, 1, intval($kes[2]));
                 break;
 //            case 'BlockTopHeight' :
 //                //没有sha1作为key，直接返回任意的hash值，val函数根据key来获取数据

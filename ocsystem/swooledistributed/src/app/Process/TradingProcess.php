@@ -88,7 +88,7 @@ class TradingProcess extends Process
      * 同步时的最高区块
      * @var int
      */
-    private $TopBlockHigh = 1;
+    private $TopBlockHigh = 0;
 
     /**
      * 初始化函数
@@ -705,7 +705,7 @@ class TradingProcess extends Process
                         '_id'   =>  $trading_txid,
                         'trading'   =>  $td_val,
                     ];
-            }
+                }
                 //先将数据库中的数据删除
                 $delete_where = ['_id' => ['$in' => $sync_txids]];
                 $delete_res = $this->deleteTradingPoolMany($delete_where);
