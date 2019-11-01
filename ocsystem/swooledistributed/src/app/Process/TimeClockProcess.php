@@ -149,9 +149,7 @@ class TimeClockProcess extends Process
      */
     public function runTimeClock()
     {
-        var_dump($this->clockState);
             if ($this->clockState) {
-                var_dump(111);
                 var_dump('当前时间'.(ceil(getTickTime() / 1000) - $this->getDifference()) % 126);
                 if (ceil(getTickTime() / 1000) - $this->getDifference() % 126 <= 0){
                     //先关闭节点
@@ -177,8 +175,8 @@ class TimeClockProcess extends Process
                      * 开始统计投票，决定下一轮的超级节点
                      */
                     $rotation_res = ProcessManager::getInstance()
-                        ->getRpcCall(NodeProcess::class)
-                        ->rotationSuperNode($this->rounds);
+                                ->getRpcCall(NodeProcess::class)
+                                ->rotationSuperNode($this->rounds);
                     if (empty($rotation_res['Data'])) {
                         return;
 //                        continue;
@@ -186,11 +184,11 @@ class TimeClockProcess extends Process
                     /**
                      * 更新当前节点信息
                      */
-                    var_dump('当前节点次序:' . $rotation_res['Data']);
+                    var_dump('当前节点次序:' . $rotation_res['Data']['index']);
                     //设置节点次序
                     ProcessManager::getInstance()
                                 ->getRpcCall(ConsensusProcess::class)
-                                ->setIndex($rotation_res['Data']);
+                                ->setIndex($rotation_res['Data']['index']);
 
                     /**
                      * 刷新超级节点连接池
@@ -198,12 +196,12 @@ class TimeClockProcess extends Process
                     ProcessManager::getInstance()
                                 ->getRpcCall(CoreNetworkProcess::class)
                                 ->rushSuperNodeLink();
-                    if ($rotation_res['Data'] == 0) {
+                    if ($rotation_res['Data']['index'] == 0) {
                         //设置节点身份
                         ProcessManager::getInstance()
                             ->getRpcCall(ConsensusProcess::class)
                             ->setNodeIdentity('ordinary');
-                    } elseif ($rotation_res['Data'] > 3) {
+                    } elseif ($rotation_res['Data']['index'] > 3) {
                         //设置节点身份
                         ProcessManager::getInstance()
                             ->getRpcCall(ConsensusProcess::class)
@@ -222,7 +220,6 @@ class TimeClockProcess extends Process
                             ->getRpcCall(ConsensusProcess::class)
                             ->openConsensus();
                     }
-
                     var_dump('round change over.');
                 }
                 ProcessManager::getInstance()
@@ -306,12 +303,16 @@ class TimeClockProcess extends Process
 //        }
         $systime = ceil(getTickTime() / 1000);
         $work_time = $time == 0 ? ($time % 126) - 1 : $time % 126;
-        $round = ceil($time / 126) + 1;
         //设置时间钟差值
         $this->setDifference($systime - $work_time);
         //设置当前轮次
         var_dump((ceil(getTickTime() / 1000) - $this->getDifference()) % 126);
         //开启时间钟
+        var_dump('开启时间钟.');
+        var_dump($systime);
+        var_dump($time);
+        var_dump($work_time);
+        var_dump($this->difference);
         $this->openClock();
     }
 

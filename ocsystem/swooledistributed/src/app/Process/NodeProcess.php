@@ -276,7 +276,7 @@ class NodeProcess extends Process
                         ->insertSuperNodeMany($new_super_node);
 
         var_dump('over2');
-        return returnSuccess($node_rounds);
+        return returnSuccess(['superNode' => $new_super_node, 'index' => $node_rounds]);
     }
 
     /**
