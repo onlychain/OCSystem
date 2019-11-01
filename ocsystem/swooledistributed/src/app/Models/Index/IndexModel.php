@@ -151,8 +151,10 @@ class IndexModel extends Model
             $system_time = 0;
             $top_block = ProcessManager::getInstance()
                                     ->getRpcCall(BlockProcess::class)
-                                    ->getBlockHeadInfo([], [], ['height' => -1]);
-            $system_time = $top_block['thisTime'];
+                                    ->getBloclHeadList([], [], 1, 1, ['height' => -1]);//getBlockHeadInfo
+            var_dump(888888888);
+            var_dump($top_block);
+            $system_time = $top_block['Data'][0]['thisTime'];
             ProcessManager::getInstance()
                             ->getRpcCall(TimeClockProcess::class, true)
                             ->delClock($system_time);
@@ -201,11 +203,11 @@ class IndexModel extends Model
             $clock_state = ProcessManager::getInstance()
                                 ->getRpcCall(TimeClockProcess::class)
                                 ->getClockState();
-            $top_clock_height = ProcessManager::getInstance()
+            $sync_clock_height = ProcessManager::getInstance()
                                             ->getRpcCall(BlockProcess::class)
-                                            ->getTopBlockHeight();
-            var_dump($top_clock_height);
-            if(!$clock_state && $top_clock_height < 10){
+                                            ->getSyncBlockTopHeight();//getTopBlockHeight
+            var_dump($sync_clock_height);
+            if(!$clock_state && $sync_clock_height < 10){
                 ProcessManager::getInstance()
                                 ->getRpcCall(BlockProcess::class, true)
                                 ->setBlockState(3);

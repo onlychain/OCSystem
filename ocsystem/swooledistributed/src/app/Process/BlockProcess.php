@@ -139,6 +139,7 @@ class BlockProcess extends Process
             'projection'    =>  $data,
             'limit'         =>  $pagesize,
             'skip'          =>  ($page - 1) * $pagesize,
+            'sort'          =>  $sort,
         ];
         //获取数据
         $list_res = $this->Block->find($filter, $options)->toArray();
@@ -457,7 +458,8 @@ class BlockProcess extends Process
         $this->setBlockState(2);
         //从别的节点获取最高的区块高度,同步验证至这一高度
         var_dump($this->SyncBlockTopHeight);
-        if($this->SyncBlockTopHeight == 0){
+        if($this->SyncBlockTopHeight == 1){
+
             return returnError('等待获取高度.');
         }
         //循环同步区块,如果同步的区块高度大于同步前获取的区块高度一个片段，则认为同步完成
@@ -569,7 +571,7 @@ class BlockProcess extends Process
      * 获取同步区块的高度
      * @return int
      */
-    public function getSyncBlockTopHeight()
+    public function getSyncBlockTopHeight() : int
     {
         return $this->SyncBlockTopHeight;
     }

@@ -75,24 +75,27 @@ class BlockBaseModel extends Model
      */
     public function checkBlockRequest(array $block_head = [], $trading_type = 1, $is_broadcast = 1)
     {
-//        var_dump($block_head);
+        var_dump($block_head);
         //判断区块状态,决定是否要同步数据
-        $check_block_state = $this->getBlockSituation($block_head);
-        if (!$check_block_state['IsSuccess']){
-            var_dump($check_block_state);
-            return returnError($check_block_state['Message']);
+        if($trading_type == 1){
+            $check_block_state = $this->getBlockSituation($block_head);
+            if (!$check_block_state['IsSuccess']){
+                var_dump($check_block_state);
+                return returnError($check_block_state['Message']);
+            }
         }
+
         //验证上一个区块的哈希是否存在
         $block_where = ['headHash' => ['$in' => [$block_head['parentHash'], $block_head['headHash']]]];
         $block_data = ['headHash' => 1, 'parentHash' => 1];
         $block_res = ProcessManager::getInstance()
                                     ->getRpcCall(BlockProcess::class)
-                                    ->getBloclHeadList($block_where, $block_data, 1, 2, ['height' => 1]);
+                                    ->getBloclHeadList($block_where, $block_data, 1, 2, []);
         if(empty($block_res['Data'])){
             var_dump('区块数据有误，请重启系统进行同步.');
-//            ProcessManager::getInstance()
-//                        ->getRpcCall(BlockProcess::class, true)
-//                        ->setBlockState(1);
+            $is_broadcast == 2 && ProcessManager::getInstance()
+                                            ->getRpcCall(BlockProcess::class, true)
+                                            ->setBlockState(1);
             return returnError('区块数据有误，请重启.');
 //            var_dump(2);
 //            //判断数据库是否有区块数据

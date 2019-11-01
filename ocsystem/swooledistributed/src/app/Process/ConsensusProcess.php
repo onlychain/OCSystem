@@ -56,7 +56,7 @@ class ConsensusProcess extends Process
      * @var
      */
 
-    private $index = 1;
+    private $index = 0;
 
     /**
      * 区块头部方法
@@ -104,7 +104,7 @@ class ConsensusProcess extends Process
      * 节点身份，分为core（核心）,alternative（备选）,ordinary（普通）
      * @var string
      */
-    private $Identity = "core";
+    private $Identity = "ordinary";
 
     /**
      * 是否开启共识
@@ -307,6 +307,12 @@ class ConsensusProcess extends Process
      */
     public function superCheckBlock(array $check_block = [])
     {
+        $clock_state = ProcessManager::getInstance()
+                                    ->getRpcCall(TimeClockProcess::class)
+                                    ->getClockState();
+        if (!$clock_state){
+            return returnError('节点未启动');
+        }
         if(empty($check_block)){
             var_dump(1);
             return returnError('请传入要验证的数据.');
