@@ -75,7 +75,7 @@ class BlockBaseModel extends Model
      */
     public function checkBlockRequest(array $block_head = [], $trading_type = 1, $is_broadcast = 1)
     {
-        var_dump($block_head);
+//        var_dump($block_head);
         //判断区块状态,决定是否要同步数据
         $check_block_state = $this->getBlockSituation($block_head);
         if (!$check_block_state['IsSuccess']){
@@ -88,10 +88,11 @@ class BlockBaseModel extends Model
         $block_res = ProcessManager::getInstance()
                                     ->getRpcCall(BlockProcess::class)
                                     ->getBloclHeadList($block_where, $block_data, 1, 2, ['height' => 1]);
-        var_dump(1);
-        var_dump($block_res);
         if(empty($block_res['Data'])){
             var_dump('区块数据有误，请重启系统进行同步.');
+//            ProcessManager::getInstance()
+//                        ->getRpcCall(BlockProcess::class, true)
+//                        ->setBlockState(1);
             return returnError('区块数据有误，请重启.');
 //            var_dump(2);
 //            //判断数据库是否有区块数据
@@ -104,45 +105,40 @@ class BlockBaseModel extends Model
 //            var_dump(4);
 //            return returnError('数据缺失.');
         }elseif (count($block_res['Data']) == 1 && $block_res['Data'][0]['headHash'] == $block_head['headHash']){
+            var_dump('区块有误，需要重新同步区块.');
             return returnError('区块有误，需要重新同步区块.');
         }elseif (count($block_res['Data']) == 1 && $block_res['Data'][0]['headHash'] == $block_head['parentHash']){
-            var_dump(5);
             //正常执行逻辑
+            var_dump('正常逻辑');
         }elseif ($block_res['Data'][0]['headHash'] == $block_head['parentHash']
                 &&
                 $block_res['Data'][1]['headHash'] == $block_head['headHash']){
-            var_dump(6);
             //已经有区块数据，跳过
+            var_dump('区块已存在');
             return returnError('区块已存在');
         }elseif ($block_res['Data'][0]['headHash'] != $block_head['parentHash']
             &&
             $block_res['Data'][1]['headHash'] != $block_head['headHash']){
-            var_dump(7);
+            var_dump('区块数据有误');
             return returnError('区块数据有误');
-        }else{
-            return;
         }
-        var_dump(8);
-        //验证交易是否都存在
-        $trading_where = ['_id' => ['$in' => $block_head['tradingInfo']]];
-        $trading_data = ['trading' => 0, 'time' => 0];
-        $trading_res = [];
-        if($trading_type == 1){
-            //查询交易内容
-            $trading_res = ProcessManager::getInstance()
-                                        ->getRpcCall(TradingProcess::class)
-                                        ->getTradingList($trading_where, $trading_data, 1, count($block_head['tradingInfo']));
-        }else{
+
+        if($trading_type != 1){
+            //验证交易是否都存在
+            $trading_where = ['_id' => ['$in' => $block_head['tradingInfo']]];
+            $trading_data = ['trading' => 0, 'time' => 0];
+            $trading_res = [];
             //查询交易池内容
             $trading_res = ProcessManager::getInstance()
-                                        ->getRpcCall(TradingPoolProcess::class)
-                                        ->getTradingPoolList($trading_where, $trading_data, 1, count($block_head['tradingInfo']));
-        }
-        var_dump('-------------=-------------=-----------------');
-        var_dump(count($trading_res['Data']));
-        var_dump(count($block_head['tradingInfo']));
-        if(empty($trading_res['Data']) ||  count($trading_res['Data']) != count($block_head['tradingInfo'])){
-            return returnError('区块验证失败!');
+                ->getRpcCall(TradingPoolProcess::class)
+                ->getTradingPoolList($trading_where, $trading_data, 1, count($block_head['tradingInfo']));
+            $trading_res['Data'] = $block_head['tradingInfo'];
+            var_dump('-------------=-------------=-----------------');
+            var_dump(count($trading_res['Data']));
+            var_dump(count($block_head['tradingInfo']));
+            if(empty($trading_res['Data']) ||  count($trading_res['Data']) != count($block_head['tradingInfo'])){
+                return returnError('区块验证失败!');
+            }
         }
         $merker_tree = $this->MerkleTree->setNodeData($block_head['tradingInfo'])
                                         ->bulidMerkleTreeSimple();
@@ -152,20 +148,24 @@ class BlockBaseModel extends Model
         $check_head = $this->BlockHead->setMerkleRoot($morker_tree_root)
                                         ->setParentHash($block_head['parentHash'])//上一个区块的哈希
                                         ->setThisTime($block_head['thisTime'])
-                                        ->setHeight($block_head['height'])//区块高度先暂存，后期不上
+                                        ->setHeight($block_head['height'])//区块高度先暂存
                                         ->setTxNum(count($block_head['tradingInfo']))
                                         ->setTradingInfo($block_head['tradingInfo'])
                                         ->setSignature($block_head['signature'])
                                         ->setVersion($block_head['version'])
                                         ->packBlockHead();
         if($check_head['headHash'] !== $block_head['headHash']){
-            var_dump();
+            var_dump('区块验证不通过：'.$block_head['height']);
             return returnError('区块验证不通过!');
         }
-        if ($is_broadcast != 2){
+        if ($is_broadcast != 1){
             ProcessManager::getInstance()
-                ->getRpcCall(PeerProcess::class, true)
-                ->broadcast(json_encode(['broadcastType' => 'Block', 'Data' => $block_head]));
+                        ->getRpcCall(PeerProcess::class, true)
+                        ->broadcast(json_encode(['broadcastType' => 'Block', 'Data' => $block_head]));
+            //写入区块
+            ProcessManager::getInstance()
+                        ->getRpcCall(BlockProcess::class, true)
+                        ->insertBlockHead($block_head);
         }
         return returnSuccess($check_head);
     }
@@ -207,7 +207,7 @@ class BlockBaseModel extends Model
         //把当前区块存入数据库
         ProcessManager::getInstance()
                         ->getRpcCall(BlockProcess::class, true)
-                        ->insertBloclHead($block);
+                        ->insertBlockHead($block);
         return returnError('区块未同步');
     }
 
@@ -235,6 +235,7 @@ class BlockBaseModel extends Model
             }
             return returnError('区块同步中');
         }
+
         return returnSuccess();
     }
 

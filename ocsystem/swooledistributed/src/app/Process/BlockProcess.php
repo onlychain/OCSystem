@@ -178,12 +178,18 @@ class BlockProcess extends Process
      * @param array $block_head
      * @return bool
      */
-    public function insertBloclHead($block_head = [])
+    public function insertBlockHead($block_head = [])
     {
         if(empty($block_head)) return returnError('交易内容不能为空.');
         $insert_res = $this->Block->insertOne($block_head);
         if(!$insert_res->isAcknowledged()){
             return returnError('插入失败!');
+        }
+        if($block_head['height'] > $this->getTopBlockHeight()){
+            //更新区块高度
+            $this->setTopBlockHeight($block_head['height']);
+            //更新最新区块哈希
+            $this->setTopBlockHash($block_head['headHash']);
         }
         return returnSuccess(['id' => $insert_res->getInsertedId()->__toString()]);
     }
@@ -193,7 +199,7 @@ class BlockProcess extends Process
      * @param array $block
      * @return bool
      */
-    public function insertBloclHeadMany($block = [], $get_ids = false)
+    public function insertBlockHeadMany($block = [], $get_ids = false)
     {
         if(empty($block)) return returnError('交易内容不能为空.');
         $insert_res = $this->Block->insertMany($block);
@@ -205,6 +211,13 @@ class BlockProcess extends Process
             foreach ($insert_res->getInsertedIds() as $ir_val){
                 $ids[] = $ir_val->__toString();
             }
+        }
+        $end_arr = array_pop($block);
+        if($end_arr['height'] > $this->getTopBlockHeight()){
+            //更新区块高度
+            $this->setTopBlockHeight($end_arr['height']);
+            //更新最新区块哈希
+            $this->setTopBlockHash($end_arr['headHash']);
         }
         return returnSuccess(['ids' => $ids]);
     }
@@ -466,23 +479,24 @@ class BlockProcess extends Process
                     $block_hashs[] = $ba_val_temp['headHash'];
                     $blocks[] = $ba_val_temp;
                 }
+                $delete_where = ['headHash' => ['$in' => $block_hashs]];
                 //删除数据
-                $this->deleteBloclHeadMany($block_hashs);
+                $this->deleteBloclHeadMany($delete_where);
                 //插入区块数据
-                $this->insertBloclHeadMany($blocks);
+                $this->insertBlockHeadMany($blocks);
                 $block_data = [];
                 ++$this->Limit;
             }
             $where = [
                 'height' =>
                     [
-                        '$gt' => ($this->Limit - 1) * $this->Pagesize + 1 ,
-                        '$lt' => $this->Pagesize * $this->Limit
+                        '$gte' => ($this->Limit - 1) * $this->Pagesize + 1 ,
+                        '$lte' => $this->Pagesize * $this->Limit
                     ]
             ];
             $data = ['_id' => 0];
             $block_res = $this->getBloclHeadList($where, $data, 1, $this->Pagesize, ['height' => 1]);
-            if (!empty($block_res['Data'])) {
+            if (count($block_res['Data']) == $this->Pagesize) {
                 var_dump('本地有数据');
                 //有数据，对数据进行检测
                 foreach ($block_res['Data'] as $br_key => $br_val) {
@@ -624,7 +638,7 @@ class BlockProcess extends Process
         //构建区块头部
         $black_head = $this->BlockHead->setMerkleRoot($morker_tree_root)
                                     ->setParentHash($top_block_hash)//上一个区块的哈希
-                                    ->setThisTime(1571316539)//区块生成时间
+                                    ->setThisTime(1)//区块生成时间
                                     ->setSignature('arnoldsaxon')//工作者签名
                                     ->setHeight($top_block_height + 1)
                                     ->setTxNum(count($tx_ids))
@@ -665,7 +679,11 @@ class BlockProcess extends Process
                     ->setPurseState(1);
 
         //插入区块数据
-        $this->insertBloclHead($black_head);
+        $this->insertBlockHead($black_head);
+        //设置区块高度
+        $this->setTopBlockHeight(1);
+        //设置最新区块的hash
+        $this->setTopBlockHash($black_head['headHash']);
         //报文
         $context = [
             "start_time" => date('Y-m-d H:i:s'),
@@ -690,10 +708,7 @@ class BlockProcess extends Process
                     ->getRpcCall(ConsensusProcess::class, true)
                     ->bookedPurse($tradings);
 
-        //设置区块高度
-        $this->setTopBlockHeight(1);
-        //设置最新区块的hash
-        $this->setTopBlockHash($black_head['headHash']);
+
         var_dump('初始化结束');
         return returnSuccess();
 

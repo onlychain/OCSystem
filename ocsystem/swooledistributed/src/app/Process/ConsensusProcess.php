@@ -230,6 +230,10 @@ class ConsensusProcess extends Process
                 $encode_trading = [];//未序列化交易
                 $ids = [];//交易编号
                 $this_time = time();//打包出块时间
+                //获取项目系统时间
+                $system_time = ProcessManager::getInstance()
+                                            ->getRpcCall(TimeClockProcess::class)
+                                            ->getCreationTime();
                 //执行激励策略
                 $this->incentive(get_instance()->config['address'], $this_time);
                 $page = 1;
@@ -268,7 +272,7 @@ class ConsensusProcess extends Process
                     //构建区块头部
                     $black_head = $this->BlockHead->setMerkleRoot($morker_tree_root)
                                                     ->setParentHash($top_block_hash)//上一个区块的哈希
-                                                    ->setThisTime($this_time)//区块生成时间
+                                                    ->setThisTime($system_time)//区块生成的项目时间
                                                     ->setSignature(get_instance()->config['name'])//工作者签名
                                                     ->setHeight($top_block_height + 1)//区块高度先暂存，后期不上
                                                     ->setTxNum($trading_num)
@@ -279,8 +283,7 @@ class ConsensusProcess extends Process
                     $this->Block[$black_head['headHash']]['out_time'] = time();
                     $this->ConsensusResult[$black_head['headHash']][get_instance()->config['address']] = true;
                     $this->ConsensusResult[$black_head['headHash']]['out_time'] = time();
-                    $check_block = $this->getBlockMessage($black_head, true);
-
+                    $check_block = $this->getBlockMessage($black_head, $this_time, true);
                     $context = getNullContext();
 
                     //发起S共识
@@ -305,25 +308,31 @@ class ConsensusProcess extends Process
     public function superCheckBlock(array $check_block = [])
     {
         if(empty($check_block)){
+            var_dump(1);
             return returnError('请传入要验证的数据.');
         }
         //判断消息是否已经过期
         if(($check_block['time'] + 60) < time()){
+            var_dump(2);
             return returnError('消息过期.');
         }
         if(isset($this->Block[$check_block['data']['headHash']]['state']) && !$this->Block[$check_block['data']['headHash']]['state']){
+            var_dump(3);
             return returnError('区块已确认!');
         }
+        var_dump(4);
         $check_res = true;
         //先判断是否是自身节点
         if($check_block['createder'] != get_instance()->config['address']){
+            var_dump(5);
             //还没有验证过区块，先验证，只存储确认过的区块数据
             if(empty($this->Block[$check_block['data']['headHash']])){
+                var_dump(9);
                 $this->ConsensusResult[$check_block['data']['headHash']][$check_block['createder']] = true;
                 $this->ConsensusResult[$check_block['data']['headHash']]['out_time'] = time();
                 $this->Block[$check_block['data']['headHash']]['state'] = true;
                 //获取这个发起者
-                $incentive_res = $this->incentive($check_block['createder'], $check_block['data']['thisTime']);
+                $incentive_res = $this->incentive($check_block['createder'], $check_block['time']);
                 if(!$incentive_res['IsSuccess']){
                     return returnError($incentive_res['Message']);
                 }
@@ -338,13 +347,14 @@ class ConsensusProcess extends Process
                     $check_res = false;
                     $this->ConsensusResult[$check_block['data']['headHash']][get_instance()->config['address']] = $check_res;
                 }else{
+                    var_dump(16);
                     $this->Block[$check_block['data']['headHash']] = $check_block['data'];
                     $this->Block[$check_block['data']['headHash']]['out_time'] = time();
                     //存储结果
                     $this->ConsensusResult[$check_block['data']['headHash']][get_instance()->config['address']] = $check_res;
                 }
                 //广播结果
-                $recheck_block = $this->getBlockMessage($check_block['data'], $check_res);
+                $recheck_block = $this->getBlockMessage($check_block['data'], $check_block['time'], $check_res);
                 $recheck_block['createder'] = $check_block['createder'];
                 $context = getNullContext();
                 //发起S共识
@@ -408,21 +418,20 @@ class ConsensusProcess extends Process
         //区块头上链
         $block_head_res = ProcessManager::getInstance()
                                         ->getRpcCall(BlockProcess::class)
-                                        ->insertBloclHead($insert_block_data);
+                                        ->insertBlockHead($insert_block_data);
         //删除交易
         $del_trading = ProcessManager::getInstance()
                                     ->getRpcCall(BlockProcess::class)
                                     ->checkTreading($trading_res['Data'], $tradings);
 
-
         if($del_trading['IsSuccess']){
             //操作成功,设置当前最新区块的高度跟哈希
-            ProcessManager::getInstance()
-                        ->getRpcCall(BlockProcess::class)
-                        ->setTopBlockHash($this->Block[$check_block['data']['headHash']]['headHash']);
-            ProcessManager::getInstance()
-                        ->getRpcCall(BlockProcess::class)
-                        ->setTopBlockHeight($this->Block[$check_block['data']['headHash']]['height']);
+//            ProcessManager::getInstance()
+//                        ->getRpcCall(BlockProcess::class)
+//                        ->setTopBlockHash($this->Block[$check_block['data']['headHash']]['headHash']);
+//            ProcessManager::getInstance()
+//                        ->getRpcCall(BlockProcess::class)
+//                        ->setTopBlockHeight($this->Block[$check_block['data']['headHash']]['height']);
             //刷新钱包
             $this->bookedPurse($encode_trading);
             //清空被使用的交易缓存
@@ -485,12 +494,12 @@ class ConsensusProcess extends Process
      * 返回区块信息
      * @return array
      */
-    public function getBlockMessage($black_head, $res = true)
+    public function getBlockMessage($black_head, $time = 0, $res = true)
     {
 
         return $check_block = [
             'id'        => get_instance()->config['address'],
-            'time'      =>  time(),
+            'time'      =>  $time > 0 ? $time : time(),
             'createder'   => get_instance()->config['address'],
             'data'      =>  $black_head,
             'res'       =>  $res,

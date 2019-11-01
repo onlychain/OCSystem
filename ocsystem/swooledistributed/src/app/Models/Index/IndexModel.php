@@ -102,60 +102,62 @@ class IndexModel extends Model
             var_dump('区块同步未完成');
             return;
         }
-        /**
-         * ============================================同步交易数据============================================
-         */
-        var_dump('同步交易');
-        $trading_state = ProcessManager::getInstance()
-                                    ->getRpcCall(TradingProcess::class)
-                                    ->getTradingState();
-        var_dump($trading_state);
-        if($trading_state == 1){
-            //交易未同步，开始同步函数
-            ProcessManager::getInstance()
-                            ->getRpcCall(TradingProcess::class, true)
-                            ->syncTrading();
-
-            return;
-        }elseif($trading_state != 3){
-            //交易同步中，未同步完成，等待同步结束
-            var_dump('交易同步未完成');
-            return;
-        }
-
-        /**
-         * ============================================同步钱包数据============================================
-         */
-        var_dump('同步钱包');
-        $purse_state = ProcessManager::getInstance()
-                                    ->getRpcCall(PurseProcess::class)
-                                    ->getPurseState();
-        var_dump($purse_state);
-        if($purse_state == 1){
-            var_dump('========================================');
-            //交易未同步，开始同步函数
-            $block_state = ProcessManager::getInstance()
-                                        ->getRpcCall(PurseProcess::class, true)
-                                        ->syncPurse();
-            return;
-        }elseif($purse_state != 3){
-            //交易同步中，未同步完成，等待同步结束
-            var_dump('钱包同步未完成');
-            return;
-        }
-
-
-        //开启共识开关
-//        $identity = ProcessManager::getInstance()
-//                                    ->getRpcCall(ConsensusProcess::class, true)
-//                                    ->setOpenConsensus();
+//        /**
+//         * ============================================同步交易数据============================================
+//         */
+//        var_dump('同步交易');
+//        $trading_state = ProcessManager::getInstance()
+//                                    ->getRpcCall(TradingProcess::class)
+//                                    ->getTradingState();
+//        var_dump($trading_state);
+//        if($trading_state == 1){
+//            //交易未同步，开始同步函数
+//            ProcessManager::getInstance()
+//                            ->getRpcCall(TradingProcess::class, true)
+//                            ->syncTrading();
 //
-//        $identity = ProcessManager::getInstance()
-//                                    ->getRpcCall(ConsensusProcess::class, true)
-//                                    ->coreNode();
+//            return;
+//        }elseif($trading_state != 3){
+//            //交易同步中，未同步完成，等待同步结束
+//            var_dump('交易同步未完成');
+//            return;
+//        }
+//
+//        /**
+//         * ============================================同步钱包数据============================================
+//         */
+//        var_dump('同步钱包');
+//        $purse_state = ProcessManager::getInstance()
+//                                    ->getRpcCall(PurseProcess::class)
+//                                    ->getPurseState();
+//        var_dump($purse_state);
+//        if($purse_state == 1){
+//            var_dump('========================================');
+//            //交易未同步，开始同步函数
+//            $block_state = ProcessManager::getInstance()
+//                                        ->getRpcCall(PurseProcess::class, true)
+//                                        ->syncPurse();
+//            return;
+//        }elseif($purse_state != 3){
+//            //交易同步中，未同步完成，等待同步结束
+//            var_dump('钱包同步未完成');
+//            return;
+//        }
+        $clock_state = ProcessManager::getInstance()
+                                    ->getRpcCall(TimeClockProcess::class)
+                                    ->getClockState();
+        if(!$clock_state){
+            //获取最高的区块的时间
+            $system_time = 0;
+            $top_block = ProcessManager::getInstance()
+                                    ->getRpcCall(BlockProcess::class)
+                                    ->getBlockHeadInfo([], [], ['height' => -1]);
+            $system_time = $top_block['thisTime'];
+            ProcessManager::getInstance()
+                            ->getRpcCall(TimeClockProcess::class, true)
+                            ->delClock($system_time);
+        }
 
-        //每三十秒检查一次
-//        sleepCoroutine(30000);
 
     }
 
@@ -196,13 +198,23 @@ class IndexModel extends Model
         var_dump('当前秒针' . $time[5]);
         if($time[5] == '00' || $time[5] == '30'){
 
-            $clock_time = ProcessManager::getInstance()
+            $clock_state = ProcessManager::getInstance()
                                 ->getRpcCall(TimeClockProcess::class)
                                 ->getClockState();
             $top_clock_height = ProcessManager::getInstance()
                                             ->getRpcCall(BlockProcess::class)
                                             ->getTopBlockHeight();
-            if(!$clock_time && $top_clock_height < 10){
+            var_dump($top_clock_height);
+            if(!$clock_state && $top_clock_height < 10){
+                ProcessManager::getInstance()
+                                ->getRpcCall(BlockProcess::class, true)
+                                ->setBlockState(3);
+                ProcessManager::getInstance()
+                                ->getRpcCall(TradingProcess::class, true)
+                                ->setTradingState(3);
+                ProcessManager::getInstance()
+                                    ->getRpcCall(PurseProcess::class, true)
+                                    ->setPurseState(3);
                 var_dump('初始节点,开启时间钟');
                 ProcessManager::getInstance()
                                 ->getRpcCall(TimeClockProcess::class, true)

@@ -205,19 +205,24 @@ class NodeController extends Controller
 
     }
 
+    /**
+     * 传递超级节点之间的共识
+     * @param $param
+     */
     public function tcp_superConsensus($param)
     {
-        var_dump('收到超级节点数据');
         ProcessManager::getInstance()
                     ->getRpcCall(ConsensusProcess::class)
                     ->superCheckBlock($param);
         return $this->send(1);
     }
 
-    public function tcp_testPool($parem)
+    /**
+     * 返回系统时间
+     * @param $parem
+     */
+    public function tcp_getSystemTime($parem)
     {
-        var_dump($parem);
-        var_dump('收到');
         return $this->send($parem);
     }
 
