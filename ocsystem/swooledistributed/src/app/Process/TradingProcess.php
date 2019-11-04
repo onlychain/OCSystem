@@ -354,12 +354,12 @@ class TradingProcess extends Process
         global $del_trading;
         $lock_time_flag = true;
         $vin = $trading['vin'] ?? [];
-        $purses = $this->getAvailableTrading($address, $trading['vin']);
+        $purses = $this->getAvailableTrading($address, $vin);
         if(!$purses['IsSuccess']){
             return returnError($purses['Message']);
         }
         $purses = $purses['Data'];
-        if(empty($trading) && ($trading['lockType'] !== 4 || $trading['lockTime'] < 4294967295)){
+        if(empty($trading) || ($trading['lockType'] !== 4 && $trading['lockTime'] < 4294967295)){
             //循环查看是否有权限质押交易
             foreach ($purses as $p_key => $k_val){
                 if($k_val['lockTime'] >= 4294967295){
@@ -369,9 +369,9 @@ class TradingProcess extends Process
             }
         }
         //判断是否有交易权限
-        if($lock_time_flag){
-            return returnError('没有交易权限，请先质押相应的only开启权限。');
-        }
+//        if($lock_time_flag){
+//            return returnError('没有交易权限，请先质押相应的only开启权限。');
+//        }
         //没有交易输入，不再往下运行代码
         if(empty($trading)){
             return returnSuccess([], '有交易权限，请引入交易输入.');

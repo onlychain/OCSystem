@@ -113,7 +113,7 @@ class TimeClockProcess extends Process
      */
     public function getRounds() : int
     {
-        return intval(ceil(getTickTime() / 1000) - $this->getDifference()) + 1;
+        return ceil(intval(ceil(getTickTime() / 1000) - $this->getDifference()) / 126);
     }
 
     /**
@@ -122,7 +122,7 @@ class TimeClockProcess extends Process
      */
     public function getCreationTime() :int
     {
-        return ceil(getTickTime() / 1000) - $this->getDifference();//$this->getRounds() * 126 +
+        return ceil(getTickTime() / 1000) - $this->getDifference();
     }
 
     /**
@@ -219,6 +219,16 @@ class TimeClockProcess extends Process
                             ->getRpcCall(ConsensusProcess::class)
                             ->openConsensus();
                     }
+                    //广播节点数据
+                    ProcessManager::getInstance()
+                        ->getRpcCall(PeerProcess::class, true)
+                        ->broadcast(json_encode(['broadcastType' => 'Node', 'Data' => $examination_res['Data']['node']]));
+
+                    //广播超级节点
+                    ProcessManager::getInstance()
+                        ->getRpcCall(PeerProcess::class, true)
+                        ->broadcast(json_encode(['broadcastType' => 'SuperNode', 'Data' => $rotation_res['Data']['superNode']]));
+
                     var_dump('round change over.');
                 }
                 ProcessManager::getInstance()

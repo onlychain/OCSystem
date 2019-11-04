@@ -234,7 +234,7 @@ class NodeProcess extends Process
         $vote_sort = ['value' => -1];
         $vote_res = ProcessManager::getInstance()
                                     ->getRpcCall(VoteProcess::class)
-                                    ->getVoteList($vote_where, [], 1, 1000000, $vote_sort);
+                                    ->getVoteList($vote_where, [], 1, 100000000, $vote_sort);
         if(!empty($vote_res['Data'])){
             //有投票数据
             foreach ($vote_res['Data'] as $vr_key => $vr_val){
@@ -243,8 +243,7 @@ class NodeProcess extends Process
                     'address'   => $vr_val['address'],
                     'value'     => number_format($vr_val['value'], 0, '', ''),
                 ];
-                //取投票的百分之六十
-                $new_super_node[$vr_val['address']]['value'] += floor($vr_val['value'] * 0.6);
+                $new_super_node[$vr_val['address']]['value'] += 1;//floor($vr_val['value'] * 0.6)
             }
         }
 
@@ -259,6 +258,7 @@ class NodeProcess extends Process
             }
             $new_super_node[$nsn_key]['voters'] = $incentive_users[$nsn_key] ?? [];
             $new_super_node[$nsn_key]['address'] = $nsn_key;
+            $new_super_node[$nsn_key]['value'] = $new_super_node[$nsn_key]['value'] - floor(0.4 * count($incentive_users[$nsn_key]));
             $new_super_node[$nsn_key]['value'] = number_format($new_super_node[$nsn_key]['value'], 0, '', '');
             ++$count;
         }
@@ -322,7 +322,7 @@ class NodeProcess extends Process
         //把更新后的超级节点数据存入数据库
         $this->insertNodeMany($all_node['Data']);
         var_dump('over');
-        return returnSuccess();
+        return returnSuccess(['node' => $all_node['Data']]);
     }
     /**
      * 进程结束函数
