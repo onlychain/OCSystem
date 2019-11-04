@@ -54,54 +54,57 @@ class IndexModel extends Model
                 $this->checkState = true;
             }
         }
-//        return;
-        //定期循环检查同步区块
-        //验证区块数据是否同步完成
 
-        //验证时间钟是否同步
+        $clock_state = ProcessManager::getInstance()
+                                    ->getRpcCall(TimeClockProcess::class)
+                                    ->getClockState();
+        $sync_clock_height = ProcessManager::getInstance()
+                                        ->getRpcCall(BlockProcess::class)
+                                        ->getSyncBlockTopHeight();
 
-        //时间钟同步函数，验证时间钟是否同步
-//        $this->runTimeClock();
-//        $time_check_res = ProcessManager::getInstance()
-//                                        ->getRpcCall(TimeClockProcess::class)
-//                                        ->checkTimeClock();
-//        if(!$time_check_res['IsSuccess']){
-//            return;
-//        }
-//        ProcessManager::getInstance()
-//                        ->getRpcCall(TimeClockProcess::class, true)
-//                        ->runTimeClock();
-
-        /**
-         * 开启共识
-         */
-//        var_dump('chukuai');
-//        $identity = ProcessManager::getInstance()
-//                            ->getRpcCall(ConsensusProcess::class, true)
-//                            ->coreNode();
-//        return;
-
-        //验证数据是否同步完成
-        /**
-         * ============================================同步区块数据============================================
-         */
-        var_dump('同步区块');
-        $block_state = ProcessManager::getInstance()
-                                    ->getRpcCall(BlockProcess::class)
-                                    ->getBlockState();
-        var_dump($block_state);
-        if($block_state == 1){
-            //交易未同步，开始同步函数
-            $block_res = ProcessManager::getInstance()
-                                    ->getRpcCall(BlockProcess::class, true)
-                                    ->syncBlock();
-
-            return;
-        }elseif($block_state != 3){
-            //交易同步中，未同步完成，等待同步结束
-            var_dump('区块同步未完成');
-            return;
+        //如果到时间了仍然没有同步到数据，则作为初始节点启动
+        $time = date('Y-m-d-H-i-s', time());
+        $time = explode('-', $time);
+        var_dump('当前秒针' . $time[5]);
+        if($time[5] == '00' || $time[5] == '30'){
+            if(!$clock_state && $sync_clock_height < 10){
+                ProcessManager::getInstance()
+                                ->getRpcCall(BlockProcess::class, true)
+                                ->setBlockState(3);
+                ProcessManager::getInstance()
+                                ->getRpcCall(TradingProcess::class, true)
+                                ->setTradingState(3);
+                ProcessManager::getInstance()
+                                ->getRpcCall(PurseProcess::class, true)
+                                ->setPurseState(3);
+                var_dump('初始节点,开启时间钟');
+                ProcessManager::getInstance()
+                                ->getRpcCall(TimeClockProcess::class, true)
+                                ->delClock(0);
+            }
         }
+
+        if($sync_clock_height > 1){
+            /**
+             * ============================================同步区块数据============================================
+             */
+            var_dump('同步区块');
+            $block_state = ProcessManager::getInstance()
+                ->getRpcCall(BlockProcess::class)
+                ->getBlockState();
+            var_dump($block_state);
+            if($block_state == 1){
+                //交易未同步，开始同步函数
+                $block_res = ProcessManager::getInstance()
+                                        ->getRpcCall(BlockProcess::class, true)
+                                        ->syncBlock();
+
+                return;
+            }elseif($block_state != 3){
+                //交易同步中，未同步完成，等待同步结束
+                var_dump('区块同步未完成');
+                return;
+            }
 //        /**
 //         * ============================================同步交易数据============================================
 //         */
@@ -143,23 +146,23 @@ class IndexModel extends Model
 //            var_dump('钱包同步未完成');
 //            return;
 //        }
-        $clock_state = ProcessManager::getInstance()
-                                    ->getRpcCall(TimeClockProcess::class)
-                                    ->getClockState();
-        if(!$clock_state){
-            //获取最高的区块的时间
-            $system_time = 0;
-            $top_block = ProcessManager::getInstance()
-                                    ->getRpcCall(BlockProcess::class)
-                                    ->getBloclHeadList([], [], 1, 1, ['height' => -1]);//getBlockHeadInfo
-            var_dump(888888888);
-            var_dump($top_block);
-            $system_time = $top_block['Data'][0]['thisTime'];
-            ProcessManager::getInstance()
-                            ->getRpcCall(TimeClockProcess::class, true)
-                            ->delClock($system_time);
+            //如果同步到数据了且时间钟没有启动，开启时间钟
+            if(!$clock_state){
+                //获取最高的区块的时间
+                $system_time = 0;
+                $top_block = ProcessManager::getInstance()
+                    ->getRpcCall(BlockProcess::class)
+                    ->getBloclHeadList([], [], 1, 1, ['height' => -1]);//getBlockHeadInfo
+                $system_time = $top_block['Data'][0]['thisTime'];
+                ProcessManager::getInstance()
+                    ->getRpcCall(TimeClockProcess::class, true)
+                    ->delClock($system_time);
+            }
         }
-
+        //启动任务
+        ProcessManager::getInstance()
+                        ->getRpcCall(TimeClockProcess::class, true)
+                        ->runTimeClock();
 
     }
 
@@ -175,8 +178,8 @@ class IndexModel extends Model
     public function runConsensus()
     {
         ProcessManager::getInstance()
-                        ->getRpcCall(ConsensusProcess::class, true)
-                        ->chooseWork();
+            ->getRpcCall(ConsensusProcess::class, true)
+            ->chooseWork();
     }
 
     /**

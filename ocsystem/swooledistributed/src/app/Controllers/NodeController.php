@@ -212,7 +212,7 @@ class NodeController extends Controller
     public function tcp_superConsensus($param)
     {
         ProcessManager::getInstance()
-                    ->getRpcCall(ConsensusProcess::class)
+                    ->getRpcCall(ConsensusProcess::class, true)
                     ->superCheckBlock($param);
         return $this->send(1);
     }

@@ -199,19 +199,9 @@ class ConsensusProcess extends Process
      */
     public function coreNode($now_time = 0)
     {
-//        $now_time = CatCacheRpcProxy::getRpc()->offsetGet('topBlockHash');
-//        var_dump($this->Identity); && $this->openConsensus
-//        var_dump($this->openConsensus);
         if ($this->Identity == 'core' && $this->openConsensus){
-            //获取当前时间钟时间
-//            var_dump('获取时间');
-//            $now_time = ProcessManager::getInstance()
-//                                    ->getRpcCall(TimeClockProcess::class)
-//                                    ->getTimeClock();
-//            var_dump('获取成功'.$now_time);
             //判断是否到自己出块
             $is_work = $this->getIsCore($now_time, 3);
-//            $is_work = true;
             if($is_work){
                 var_dump("=========================================开始出块=========================================");
                 var_dump(date('Y-m-d H:i:s'));
@@ -222,13 +212,10 @@ class ConsensusProcess extends Process
                 $trading_where = [];//搜索交易条件
                 $trading_data = [];//搜索交易字段
                 $trading_res = [];//交易查询结果
-                $block_head_res = [];//存储区块头结果
                 $tradings = [];//存储交易哈希
                 $top_block_hash = '';//最新的区块头哈希
                 $top_block_height = 0;//区块高度
-//                $decode_trading = [];//已序列化交易
                 $encode_trading = [];//未序列化交易
-                $ids = [];//交易编号
                 $this_time = time();//打包出块时间
                 //获取项目系统时间
                 $system_time = ProcessManager::getInstance()
@@ -270,7 +257,7 @@ class ConsensusProcess extends Process
                                                         ->getRpcCall(BlockProcess::class)
                                                         ->getTopBlockHeight();
                     //构建区块头部
-                    $black_head = $this->BlockHead->setMerkleRoot($morker_tree_root)
+                    $block_head = $this->BlockHead->setMerkleRoot($morker_tree_root)
                                                     ->setParentHash($top_block_hash)//上一个区块的哈希
                                                     ->setThisTime($system_time)//区块生成的项目时间
                                                     ->setSignature(get_instance()->config['name'])//工作者签名
@@ -278,18 +265,18 @@ class ConsensusProcess extends Process
                                                     ->setTxNum($trading_num)
                                                     ->setTradingInfo($tradings)
                                                     ->packBlockHead();
-                    $this->Block[$black_head['headHash']] = $black_head;
-                    $this->Block[$black_head['headHash']]['state'] = true;
-                    $this->Block[$black_head['headHash']]['out_time'] = time();
-                    $this->ConsensusResult[$black_head['headHash']][get_instance()->config['address']] = true;
-                    $this->ConsensusResult[$black_head['headHash']]['out_time'] = time();
-                    $check_block = $this->getBlockMessage($black_head, $this_time, true);
+                    $this->Block[$block_head['headHash']] = $block_head;
+                    $this->Block[$block_head['headHash']]['state'] = true;
+                    $this->Block[$block_head['headHash']]['out_time'] = time();
+                    $this->ConsensusResult[$block_head['headHash']][get_instance()->config['address']] = true;
+                    $this->ConsensusResult[$block_head['headHash']]['out_time'] = time();
+                    $check_block = $this->getBlockMessage($block_head, $this_time, true);
                     $context = getNullContext();
 
                     //发起S共识
                     //广播区块数据
                     var_dump('区块创建完成，发送给其他超级节点确认.');
-                    var_dump('区块hash:' . $black_head['headHash']);
+                    var_dump('区块hash:' . $block_head['headHash']);
                     ProcessManager::getInstance()
                                     ->getRpcCall(CoreNetworkProcess::class, true)
                                     ->sendToSuperNode(json_encode($check_block), $context, 'NodeController', 'superConsensus');
@@ -304,6 +291,7 @@ class ConsensusProcess extends Process
      * BFT共识
      * @param array $check_block
      * @return bool
+     * @oneWay
      */
     public function superCheckBlock(array $check_block = [])
     {
@@ -314,23 +302,18 @@ class ConsensusProcess extends Process
             return returnError('节点未启动');
         }
         if(empty($check_block)){
-            var_dump(1);
             return returnError('请传入要验证的数据.');
         }
         //判断消息是否已经过期
         if(($check_block['time'] + 60) < time()){
-            var_dump(2);
             return returnError('消息过期.');
         }
         if(isset($this->Block[$check_block['data']['headHash']]['state']) && !$this->Block[$check_block['data']['headHash']]['state']){
-            var_dump(3);
             return returnError('区块已确认!');
         }
-        var_dump(4);
         $check_res = true;
         //先判断是否是自身节点
         if($check_block['createder'] != get_instance()->config['address']){
-            var_dump(5);
             //还没有验证过区块，先验证，只存储确认过的区块数据
             if(empty($this->Block[$check_block['data']['headHash']])){
                 var_dump(9);
@@ -353,7 +336,6 @@ class ConsensusProcess extends Process
                     $check_res = false;
                     $this->ConsensusResult[$check_block['data']['headHash']][get_instance()->config['address']] = $check_res;
                 }else{
-                    var_dump(16);
                     $this->Block[$check_block['data']['headHash']] = $check_block['data'];
                     $this->Block[$check_block['data']['headHash']]['out_time'] = time();
                     //存储结果
@@ -397,7 +379,6 @@ class ConsensusProcess extends Process
             //没有超过半数节点，不做记录，判断这个节点是否已经超时
             return returnError();
         }
-
         //超过半数节点通过，执行相应操作`
         //把超时时间设置为0
         $this->Block[$check_block['data']['headHash']]['state'] = false;
