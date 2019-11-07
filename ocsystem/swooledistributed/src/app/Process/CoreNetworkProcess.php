@@ -65,7 +65,7 @@ class CoreNetworkProcess extends Process
         //超级节点条件
         $nodes_where = [];
         //获取的字段
-        $nodes_data = ['_id' => 0, 'voter'  => 0];
+        $nodes_data = ['_id' => 0, 'voters'  => 0];
         //获取的结果
         $nodes_res = [];
         $nodes_res = ProcessManager::getInstance()

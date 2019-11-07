@@ -53,6 +53,20 @@ class NodeProcess extends Process
     }
 
     /**
+     * 创建节点索引
+     * @return bool
+     */
+    public function createdNodeIndex()
+    {
+        $this->Node->createIndexes(
+            [
+                ['key' => ['address' => 1]]
+            ]
+        );
+        return returnSuccess();
+    }
+
+    /**
      * 获取多条已经入库的交易
      * @param array $where
      * @param array $data
@@ -234,7 +248,7 @@ class NodeProcess extends Process
         $vote_sort = ['value' => -1];
         $vote_res = ProcessManager::getInstance()
                                     ->getRpcCall(VoteProcess::class)
-                                    ->getVoteList($vote_where, [], 1, 100000000, $vote_sort);
+                                    ->getVoteList($vote_where, [], 1, 3000000, $vote_sort);
         if(!empty($vote_res['Data'])){
             //有投票数据
             foreach ($vote_res['Data'] as $vr_key => $vr_val){
@@ -246,7 +260,6 @@ class NodeProcess extends Process
                 $new_super_node[$vr_val['address']]['value'] += 1;//floor($vr_val['value'] * 0.6)
             }
         }
-
         //对值进行排序
         //获取前30个节点
         $new_super_node = array_slice($new_super_node, 0, 30);
@@ -258,7 +271,7 @@ class NodeProcess extends Process
             }
             $new_super_node[$nsn_key]['voters'] = $incentive_users[$nsn_key] ?? [];
             $new_super_node[$nsn_key]['address'] = $nsn_key;
-            $new_super_node[$nsn_key]['value'] = $new_super_node[$nsn_key]['value'] - floor(0.4 * count($incentive_users[$nsn_key]));
+            $new_super_node[$nsn_key]['value'] -= floor(0.4 * count($new_super_node[$nsn_key]['voters']));
             $new_super_node[$nsn_key]['value'] = number_format($new_super_node[$nsn_key]['value'], 0, '', '');
             ++$count;
         }

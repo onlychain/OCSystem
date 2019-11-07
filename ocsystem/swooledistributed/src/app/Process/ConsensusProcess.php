@@ -130,9 +130,6 @@ class ConsensusProcess extends Process
     public function start($process)
     {
         var_dump('ConsensusProcess');
-//        $this->MongoUrl = 'mongodb://localhost:27017';
-//        $this->MongoDB = new \MongoDB\Client($this->MongoUrl);
-//        $this->Block = $this->MongoDB->selectCollection('blicks', 'block');
         $context = get_instance()->getNullContext();
         //区块基类相关方法
         $this->BlockBase = new BlockBaseModel();
@@ -168,6 +165,7 @@ class ConsensusProcess extends Process
     public function chooseWork($time = 0)
     {
         $threshold = 0;
+        var_dump($this->Identity);
         if($this->openConsensus){
 //        while ($threshold < 10){
             switch ($this->Identity){
@@ -279,7 +277,7 @@ class ConsensusProcess extends Process
                     var_dump('区块hash:' . $block_head['headHash']);
                     ProcessManager::getInstance()
                                     ->getRpcCall(CoreNetworkProcess::class, true)
-                                    ->sendToSuperNode(json_encode($check_block), $context, 'NodeController', 'superConsensus');
+                                    ->sendToSuperNode(json_encode($check_block), $context, 'NodeController', 'superConsensus', true);
                 }
             }
 //            sleepCoroutine(2000);
@@ -306,6 +304,7 @@ class ConsensusProcess extends Process
         }
         //判断消息是否已经过期
         if(($check_block['time'] + 60) < time()){
+            var_dump('消息过期');
             return returnError('消息过期.');
         }
         if(isset($this->Block[$check_block['data']['headHash']]['state']) && !$this->Block[$check_block['data']['headHash']]['state']){
@@ -313,7 +312,7 @@ class ConsensusProcess extends Process
         }
         $check_res = true;
         //先判断是否是自身节点
-        if($check_block['createder'] != get_instance()->config['address']){
+        if($check_block['createder'] != get_instance()->config['address'] && $check_block['createder'] == $check_block['id']){
             //还没有验证过区块，先验证，只存储确认过的区块数据
             if(empty($this->Block[$check_block['data']['headHash']])){
                 var_dump(9);
@@ -348,7 +347,7 @@ class ConsensusProcess extends Process
                 //发起S共识
                 ProcessManager::getInstance()
                             ->getRpcCall(CoreNetworkProcess::class, true)
-                            ->sendToSuperNode(json_encode($recheck_block), $context, 'NodeController', 'superConsensus');
+                            ->sendToSuperNode(json_encode($recheck_block), $context, 'NodeController', 'superConsensus', true);
             }
         }elseif($check_block['id'] != get_instance()->config['address']){
             $this->ConsensusResult[$check_block['data']['headHash']][$check_block['id']] = $check_block['res'];
@@ -362,6 +361,7 @@ class ConsensusProcess extends Process
                 var_dump('不通过');
             }
         }else{
+            var_dump('异常');
             var_dump($check_block);
             return;
         }
@@ -373,7 +373,8 @@ class ConsensusProcess extends Process
                 ++$check_count;
             }
         }
-        var_dump('当前区块确认数:'.$check_count);
+        var_dump('当前区块:'.$check_block['data']['headHash']);
+        var_dump('确认数:'.$check_count);
         //判断是否可以上链
         if($check_count < 2){
             //没有超过半数节点，不做记录，判断这个节点是否已经超时
@@ -852,6 +853,7 @@ class ConsensusProcess extends Process
         $scope = 0;
         $scope = $time % ($node * 2);
         var_dump('出块次序:'.$this->index);
+        var_dump($scope === (2 * $this->index - 1));
         if ($scope === (2 * $this->index - 1)) {//$scope === (2 * ($this->index - 1)) ||
             return true;
         }

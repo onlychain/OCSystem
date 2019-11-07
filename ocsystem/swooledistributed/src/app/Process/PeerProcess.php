@@ -329,6 +329,7 @@ class PeerProcess extends Process
      */
     public function getBroadcast($sender, $TTL, $content)
     {
+        var_dump($content);
         $context = getNullContext();
 //        var_dump($content);
         //反序列化数据
@@ -375,6 +376,7 @@ class PeerProcess extends Process
     public function broadcast(string $content = '')
     {
         var_dump('发送广播');
+        var_dump($this->getNodes());
         p2p_broadcast($content);
     }
 
