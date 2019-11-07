@@ -205,24 +205,24 @@ class ComposerStaticInit301669c15036b536d924505e5052685e
             0 => __DIR__ . '/..' . '/mongodb/mongodb/src',
         ),
         'MongoDB\\Model\\' =>
-            array(
-                0 => __DIR__ . '/..' . '/mongodb/mongodb/src/Model',
+        array(
+            0 => __DIR__ . '/..' . '/mongodb/mongodb/src/Model',
         ),
         'MongoDB\\Exception\\' =>
-            array(
-                0 => __DIR__ . '/..' . '/mongodb/mongodb/src/Exception',
+        array(
+            0 => __DIR__ . '/..' . '/mongodb/mongodb/src/Exception',
         ),
         'MongoDB\\Operation\\' =>
-            array(
-                0 => __DIR__ . '/..' . '/mongodb/mongodb/src/Operation',
+        array(
+            0 => __DIR__ . '/..' . '/mongodb/mongodb/src/Operation',
         ),
         'MongoDB\\GridFS\\' =>
-            array(
-                0 => __DIR__ . '/..' . '/mongodb/mongodb/src/GridFS',
+        array(
+            0 => __DIR__ . '/..' . '/mongodb/mongodb/src/GridFS',
         ),
         'MongoDB\\GridFS\\Exception\\' =>
-            array(
-                0 => __DIR__ . '/..' . '/mongodb/mongodb/src/GridFS/Exception',
+        array(
+            0 => __DIR__ . '/..' . '/mongodb/mongodb/src/GridFS/Exception',
         ),
         'Illuminate\\View\\' => 
         array (
@@ -244,7 +244,7 @@ class ComposerStaticInit301669c15036b536d924505e5052685e
         array (
             0 => __DIR__ . '/..' . '/illuminate/contracts',
         ),
-        'Illuminate\\Container\\' =>
+        'Illuminate\\Container\\' => 
         array (
             0 => __DIR__ . '/..' . '/illuminate/container',
         ),
@@ -264,15 +264,10 @@ class ComposerStaticInit301669c15036b536d924505e5052685e
         array (
             0 => __DIR__ . '/..' . '/nesbot/carbon/src/Carbon',
         ),
-        'Firebase\\JWT\\' =>
-        array(
-            0 => __DIR__ . '/..' . '/phpjwt/php-jwt/src',
-        ),
         'BitcoinPHP\\BitcoinECDSA\\' =>
         array(
             0 => __DIR__ . '/..' . '/bitcoinecdsa/BitcoinECDSA/src/BitcoinPHP/BitcoinECDSA'
         ),
-
     );
 
     public static $classMap = array (

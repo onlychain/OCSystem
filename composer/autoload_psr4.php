@@ -40,7 +40,6 @@ return array(
     'Ds\\' => array($vendorDir . '/php-ds/php-ds/src'),
     'Doctrine\\Common\\Inflector\\' => array($vendorDir . '/doctrine/inflector/lib/Doctrine/Common/Inflector'),
     'Carbon\\' => array($vendorDir . '/nesbot/carbon/src/Carbon'),
-    'Firebase\\JWT\\' => array($vendorDir . '/phpjwt/php-jwt/src'),
     'BitcoinPHP\\BitcoinECDSA\\' => array($vendorDir . '/bitcoinecdsa/BitcoinECDSA/src/BitcoinPHP/BitcoinECDSA'),
     'MongoDB\\' => array($vendorDir . '/mongodb/mongodb/src'),
     'MongoDB\\Exception\\' => array($vendorDir . '/mongodb/mongodb/src/Exception'),
