@@ -113,7 +113,7 @@ class TimeClockProcess extends Process
      */
     public function getRounds() : int
     {
-        return ceil(intval(ceil(getTickTime() / 1000) - $this->getDifference()) / 126);
+        return ceil(intval(ceil(getTickTime() / 1000) - $this->getDifference()) / 126) + 1;
     }
 
     /**
@@ -173,9 +173,10 @@ class TimeClockProcess extends Process
                     /**
                      * 开始统计投票，决定下一轮的超级节点
                      */
+                    var_dump($this->getRounds());
                     $rotation_res = ProcessManager::getInstance()
-                                ->getRpcCall(NodeProcess::class)
-                                ->rotationSuperNode($this->getRounds());
+                                        ->getRpcCall(NodeProcess::class)
+                                        ->rotationSuperNode($this->getRounds());
                     if (empty($rotation_res['Data'])) {
                         return;
 //                        continue;
@@ -195,6 +196,7 @@ class TimeClockProcess extends Process
                     ProcessManager::getInstance()
                                 ->getRpcCall(CoreNetworkProcess::class)
                                 ->rushSuperNodeLink();
+                    var_dump('rush over');
                     if ($rotation_res['Data']['index'] == 0) {
                         //设置节点身份
                         ProcessManager::getInstance()
@@ -219,7 +221,7 @@ class TimeClockProcess extends Process
                             ->getRpcCall(ConsensusProcess::class)
                             ->openConsensus();
                     }
-                    //广播节点数据
+//                    //广播节点数据
                     ProcessManager::getInstance()
                         ->getRpcCall(PeerProcess::class, true)
                         ->broadcast(json_encode(['broadcastType' => 'Node', 'Data' => $examination_res['Data']['node']]));
@@ -311,7 +313,7 @@ class TimeClockProcess extends Process
 //            return returnError('同步时间有误');
 //        }
         $systime = ceil(getTickTime() / 1000);
-        $work_time = $time == 0 ? ($time % 126) - 1 : $time % 126;
+        $work_time =  $time % 126;//0 ? ($time % 126) - 1 :$time == 0 ? ($time % 126) - 1 :
         //设置时间钟差值
         $this->setDifference($systime - $work_time);
         //开启时间钟

@@ -65,6 +65,21 @@ class TradingPoolProcess extends Process
     }
 
     /**
+     * 创建交易池索引
+     * @return bool
+     */
+    public function createdTradingPoolIndex()
+    {
+        $this->TradingPool->createIndexes(
+            [
+                ['key' => ['_id' => 1]],
+                ['key' => ['noce' => 1]],
+            ]
+        );
+        return returnSuccess();
+    }
+
+    /**
      * 获取交易池内的交易数据
      * @param array $where
      * @param array $data

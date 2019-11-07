@@ -66,6 +66,21 @@ class PurseProcess extends Process
     }
 
     /**
+     * 创建钱包索引
+     * @return bool
+     */
+    public function createdPurseIndex()
+    {
+        $this->Purse->createIndexes(
+            [
+                ['key' => ['address' => 1]],
+                ['key' => ['txId' => 1]],
+            ]
+        );
+        return returnSuccess();
+    }
+
+    /**
      * 获取区块头部数据
      * @param array $where
      * @param array $data
