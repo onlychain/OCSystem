@@ -13,6 +13,7 @@ use app\Models\Block\BlockHeadModel;
 use app\Models\Node\NodeModel;
 use app\Models\Block\MerkleTreeModel;
 use app\Models\Consensus\ConsensusModel;
+use app\Models\Node\VoteModel;
 use app\Models\Trading\TradingEncodeModel;
 use Server\Components\Process\Process;
 use Server\Components\CatCache\CatCacheRpcProxy;
@@ -23,6 +24,7 @@ use app\Process\TradingPoolProcess;
 use app\Process\PeerProcess;
 use app\Process\TradingProcess;
 use app\Process\NodeProcess;
+use app\Process\VoteProcess;
 use app\Process\PurseProcess;
 use app\Process\ConsensusProcess;
 
@@ -711,9 +713,56 @@ class BlockProcess extends Process
                     ->bookedPurse($tradings);
 
 
+        //创建各个集合索引
+
         var_dump('初始化结束');
         return returnSuccess();
 
+    }
+
+    /**
+     * 新节点启动时创建索引
+     */
+    public function createdIndexs()
+    {
+        //创建Block索引
+        $this->createdBlockIndex();
+
+        ProcessManager::getInstance()
+            ->getRpcCall(TradingPoolProcess::class, true)
+            ->createdTradingPoolIndexs();
+
+        ProcessManager::getInstance()
+            ->getRpcCall(TradingProcess::class, true)
+            ->createdTradingIndexs();
+
+        ProcessManager::getInstance()
+            ->getRpcCall(NodeProcess::class, true)
+            ->createdNodeIndexs();
+
+        ProcessManager::getInstance()
+            ->getRpcCall(PurseProcess::class, true)
+            ->createdPurseIndexs();
+
+        ProcessManager::getInstance()
+            ->getRpcCall(VoteProcess::class, true)
+            ->createdVoteIndexs();
+        return returnSuccess();
+    }
+
+    /**
+     * 设置Block集合索引
+     */
+    public function createdBlockIndex()
+    {
+        $this->Block->createIndexes(
+            [
+                ['key' => ['headHash' => 1]],
+                ['key' => ['merkleRoot' => 1]],
+                ['key' => ['height' => 1]],
+            ]
+        );
+        return returnSuccess();
     }
 
     /**

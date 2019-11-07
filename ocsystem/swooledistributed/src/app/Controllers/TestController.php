@@ -430,13 +430,14 @@ class TestController extends Controller
 
     public function http_testBroadcast()
     {
-        $nodes = ProcessManager::getInstance()
-                                ->getRpcCall(PeerProcess::class)
-                                ->getNodes();
-        var_dump($nodes);
+//        $nodes = ProcessManager::getInstance()
+//                                ->getRpcCall(PeerProcess::class)
+//                                ->getNodes();
+//        var_dump($nodes);
         ProcessManager::getInstance()
                         ->getRpcCall(PeerProcess::class)
                         ->broadcast(json_encode(['broadcastType' => 'Trading', 'Data' => 'hello this']));
+
     }
 
     public function http_testGetData()
@@ -483,7 +484,7 @@ class TestController extends Controller
                         ->rushSuperNodeLink();
             $aa = ProcessManager::getInstance()
                     ->getRpcCall(CoreNetworkProcess::class)
-                    ->sendToSuperNode(json_encode([111=>111]), $this->context, 'TestController', 'testPool');
+                    ->sendToSuperNode(json_encode([111=>111]), $this->context, 'TestController', 'testPool', true);
             var_dump($aa);
             if ($count % 126 == 0){
                 var_dump('asjkdhaklhjsdgajhg');

@@ -20,6 +20,7 @@ use app\Process\BlockProcess;
 use app\Process\PeerProcess;
 use app\Process\TradingProcess;
 use app\Process\TradingPoolProcess;
+use app\Process\ConsensusProcess;
 use Server\Components\Process\ProcessManager;
 use MongoDB;
 
@@ -247,7 +248,7 @@ class TradingModel extends Model
         //空着等对接
         if(!empty($trading_data['renoce']) || $trading_data['renoce'] != ''){
             //判断交易质押类型是否可以撤销
-            if(in_array($decode_trading['lockType'],[2,3,4])){
+            if(in_array($decode_trading['lockType'],[2,3])){
                 return returnError('该交易无法重置.');
             }
             //执行撤回交易
@@ -281,8 +282,8 @@ class TradingModel extends Model
         }
         if($is_broadcast == 2){
             ProcessManager::getInstance()
-                ->getRpcCall(PeerProcess::class, true)
-                ->broadcast(json_encode(['broadcastType' => 'Trading', 'Data' => $trading_data]));
+                            ->getRpcCall(PeerProcess::class, true)
+                            ->broadcast(json_encode(['broadcastType' => 'Trading', 'Data' => $trading_data]));
         }
         return returnSuccess();
     }
@@ -306,6 +307,9 @@ class TradingModel extends Model
         if(!$insert_res['IsSuccess']){
             return returnError('交易同步失败!');
         }
+        ProcessManager::getInstance()
+                        ->getRpcCall(ConsensusProcess::class, true)
+                        ->bookedPurse([$coinbase]);
         return returnSuccess();
     }
 }

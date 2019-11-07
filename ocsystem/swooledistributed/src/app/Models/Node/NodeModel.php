@@ -17,8 +17,10 @@ use Server\Components\CatCache\CatCacheRpcProxy;
 //自定义进程
 use app\Process\PeerProcess;
 use app\Process\NodeProcess;
+use app\Process\SuperNodeProcess;
 use app\Process\BlockProcess;
 use app\Process\TradingProcess;
+use app\Process\ConsensusProcess;
 use Server\Components\Process\ProcessManager;
 use MongoDB;
 
@@ -41,6 +43,18 @@ class NodeModel extends Model
      * @var
      */
     protected $TradingEncodeModel;
+
+    /**
+     * 超级节点状态
+     * @var bool
+     */
+    private $SuperState = false;
+
+    /**
+     * 普通节点状态
+     * @var bool
+     */
+    private $NodeState = false;
 
 
     /**
@@ -221,6 +235,70 @@ class NodeModel extends Model
                 ->getRpcCall(PeerProcess::class, true)
                 ->broadcast(json_encode(['broadcastType' => 'Pledge', 'Data' => $node_data]));
         }
+        return returnSuccess();
+    }
+
+    /**
+     * 更新广播的超级节点
+     * @param array $super_node
+     * @return bool
+     * @oneWay
+     */
+    public function syncSuperNode(array $super_node = [])
+    {
+        if(empty($super_node)){
+            return returnError('节点为空');
+        }
+        //获取当前节点身份
+        $this_node_identity = ProcessManager::getInstance()
+                                        ->getRpcCall(ConsensusProcess::class)
+                                        ->getNodeIdentity();
+        if($this_node_identity == 'core'){
+            return returnError('超级节点不进行同步.');
+        }
+        //先删除超级节点数据
+        $del_res = ProcessManager::getInstance()
+                            ->getRpcCall(SuperNodeProcess::class)
+                            ->deleteSuperNodePoolMany();
+        if(!$del_res['IsSuccess']){
+            return returnError('删除旧数据失败!');
+        }
+        //插入新的超级节点数据
+        ProcessManager::getInstance()
+                    ->getRpcCall(SuperNodeProcess::class, true)
+                    ->insertSuperNodeMany($super_node);
+        return returnSuccess();
+    }
+
+    /**
+     * 普通节点同步当前轮次节点信息
+     * @param array $node
+     * @return bool
+     * @oneWay
+     */
+    public function syncNode(array $node = [])
+    {
+        if(empty($node)){
+            return returnError('节点为空');
+        }
+        //获取当前节点身份
+        $this_node_identity = ProcessManager::getInstance()
+                                        ->getRpcCall(ConsensusProcess::class)
+                                        ->getNodeIdentity();
+        if($this_node_identity == 'core'){
+            return returnError('超级节点不进行同步.');
+        }
+        //先删除普通节点数据
+        $del_res = ProcessManager::getInstance()
+                                ->getRpcCall(NodeProcess::class)
+                                ->deleteNodePoolMany();
+        if(!$del_res['IsSuccess']){
+            return returnError('删除旧数据失败!');
+        }
+        //插入新的普通节点数据
+        ProcessManager::getInstance()
+                    ->getRpcCall(NodeProcess::class, true)
+                    ->insertNodeMany($node);
         return returnSuccess();
     }
 }
