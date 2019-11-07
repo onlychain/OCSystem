@@ -356,7 +356,7 @@ class TestController extends Controller
 
         ProcessManager::getInstance()
                         ->getRpcCall(NodeProcess::class)
-                        ->rotationSuperNode(2);
+                        ->rotationSuperNode(4);
     }
 
     public function http_openClock()

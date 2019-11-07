@@ -111,8 +111,6 @@ class VoteModel extends Model
         }
         $vote_res = [];//投票插入结果
         $vote = [];//质押内容
-        var_dump(1222222);
-        var_dump($type);
         if($type == 1){
             //有投过票
             $vote_where = [
@@ -120,8 +118,8 @@ class VoteModel extends Model
                 'voter'     => $vote_data['voter'],
             ];
             $vote = [
-                '$inc'  => ['value' =>  $vote_data['trading']['value']],
-                '$push' => ['txId' => ['$each' => $vote_data['trading']['txId']]]
+                '$inc'  => ['value' =>  $vote_data['trading']['value'] ?? 0],
+                '$push' => ['txId' => ['$each' => $vote_data['trading']['txId']  ?? []]]
             ];
             //修改数据
             $vote_res = ProcessManager::getInstance()
@@ -176,7 +174,6 @@ class VoteModel extends Model
         if($vote_rounds <= 1 || $vote_rounds > 3)
             return returnError('投票轮次有误!当前轮次:'.$now_round);
 
-        var_dump($vote_data['trading']);
         if(!empty($vote_data['trading'])){
             if($type == 1){
                 /**
@@ -292,7 +289,6 @@ class VoteModel extends Model
      */
     public function checkVoteRequest($vote_data = [], $is_broadcast = 1)
     {
-        var_dump($vote_data);
         $vote_res = [];//投票操作结果
         $check_vote = [];//需要验证的投票数据
         $check_vote_res = [];//投票验证结果
@@ -315,6 +311,7 @@ class VoteModel extends Model
             if($decode_trading['lockType'] != 2){
                 return returnError('质押类型有误.');
             }
+            var_dump($decode_trading);
             $check_vote['trading']['value'] = $decode_trading['vout'][0]['value'] ?? 0;//质押金额(循环获取)
             $check_vote['trading']['lockTime'] = $decode_trading['lockTime'];//质押时间
             //根据投票类型，插入质押的txId
@@ -333,7 +330,6 @@ class VoteModel extends Model
             $check_vote['trading'] = [];
             $decode_trading = [];
         }
-
         $check_vote_res = $this->checkVote($check_vote, $vote_type);
         if(!$check_vote_res['IsSuccess']) {
             return returnError($check_vote_res['Message']);
@@ -361,7 +357,6 @@ class VoteModel extends Model
         if(!$vote_res['IsSuccess']){
             return returnError($vote_res['Message']);
         }
-        var_dump('over');
         if($is_broadcast == 2){
             ProcessManager::getInstance()
                             ->getRpcCall(PeerProcess::class, true)

@@ -166,7 +166,7 @@ class VoteController extends Controller
 
         //序列化交易
         $vote_trading = $this->TradingEncodeModel->setVin($vote_res['Data'])
-                                                ->setVout([])
+                                                ->setVout($vote_data['to'])
                                                 ->setIns('')
                                                 ->setTime(time())
                                                 ->setLockTime($vote_data['lockTime'])
