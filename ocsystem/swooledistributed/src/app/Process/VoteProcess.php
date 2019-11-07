@@ -52,6 +52,21 @@ class VoteProcess extends Process
     }
 
     /**
+     * 创建投票索引
+     * @return bool
+     */
+    public function createdTradingPoolIndex()
+    {
+        $this->TradingPool->createIndexes(
+            [
+                ['key' => ['address' => 1]],
+                ['key' => ['voter' => 1]],
+            ]
+        );
+        return returnSuccess();
+    }
+
+    /**
      * 获取多条已经入库的交易
      * @param array $where
      * @param array $data

@@ -29,13 +29,9 @@ class NormalRoute implements IRoute
     public function handleClientData($data)
     {
         $this->client_data = $data;
-        var_dump($this->client_data->controller_name);
-        var_dump($this->client_data->method_name);
-        var_dump($this->client_data);
         if (isset($this->client_data->controller_name) && isset($this->client_data->method_name)) {
             return $this->client_data;
         } else {
-            var_dump(12313);
             throw new SwooleException('route 数据缺少必要字段');
         }
 

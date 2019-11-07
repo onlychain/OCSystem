@@ -109,6 +109,20 @@ class TradingProcess extends Process
     }
 
     /**
+     * 创建交易索引
+     * @return bool
+     */
+    public function createdTradingIndex()
+    {
+        $this->Trading->createIndexes(
+            [
+                ['key' => ['_id' => 1]],
+            ]
+        );
+        return returnSuccess();
+    }
+
+    /**
      * 获取多条已经入库的交易
      * @param array $where
      * @param array $data
