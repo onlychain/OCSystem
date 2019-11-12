@@ -253,14 +253,15 @@ class NodeProcess extends Process
             //有投票数据
             foreach ($vote_res['Data'] as $vr_key => $vr_val){
                 //组装各节点所有用户投票数据
-                $incentive_users[$vr_val['address']] = [
-                    'address'   => $vr_val['address'],
+                $incentive_users[$vr_val['address']][] = [
+                    'address'   => $vr_val['voter'],
                     'value'     => number_format($vr_val['value'], 0, '', ''),
                 ];
-                $new_super_node[$vr_val['address']]['value'] += 1;//floor($vr_val['value'] * 0.6)
+                $new_super_node[$vr_val['address']]['value'] += floor(50000000000 * 0.6);
             }
         }
         //对值进行排序
+        array_multisort(array_column($new_super_node,'value'),SORT_DESC,$new_super_node);
         //获取前30个节点
         $new_super_node = array_slice($new_super_node, 0, 30);
         //执行节点健康检查函数
@@ -275,7 +276,7 @@ class NodeProcess extends Process
             $new_super_node[$nsn_key]['value'] = number_format($new_super_node[$nsn_key]['value'], 0, '', '');
             ++$count;
         }
-        sort($new_super_node);
+        $new_super_node = array_values($new_super_node);
         //先删除超级节点数据
         $del_res = ProcessManager::getInstance()
                         ->getRpcCall(SuperNodeProcess::class)
@@ -287,7 +288,6 @@ class NodeProcess extends Process
         ProcessManager::getInstance()
                         ->getRpcCall(SuperNodeProcess::class)
                         ->insertSuperNodeMany($new_super_node);
-
         var_dump('over2');
         return returnSuccess(['superNode' => $new_super_node, 'index' => $node_rounds]);
     }
