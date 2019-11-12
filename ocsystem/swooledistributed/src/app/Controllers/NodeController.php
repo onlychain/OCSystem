@@ -84,6 +84,9 @@ class NodeController extends Controller
 
         //反序列化交易['pledge']
         $decode_trading = $this->TradingEncodeModel->decodeTrading($node_data['pledge']['trading']);
+        if($decode_trading == false){
+            return $this->http_output->notPut('', '交易有误.');
+        }
         //判断质押类型是否有误
         if($decode_trading['lockType'] != 3)  return $this->http_output->notPut('', '质押类型有误!');
 
@@ -141,11 +144,22 @@ class NodeController extends Controller
      */
     public function http_getNodeList()
     {
+        //获取查询的轮次
+        $rounds = $this->http_input->getPost('rounds');
+        //获取当前轮次
+        $this_rounds = ProcessManager::getInstance()
+                                    ->getRpcCall(TimeClockProcess::class)
+                                    ->getRounds();
+        if(intval($rounds) < $this_rounds){
+            $rounds = $this_rounds;
+        }elseif (intval($rounds) > $this_rounds + 3){
+            return $this->http_output->notPut('', $rounds . '轮未开始投票');
+        }
         //获取此轮参与投票的节点数
         $nodes = [];//存储参与竞选的节点
         $super_nodes = [];//超级节点
         $new_super_node = [];//新的超级节点
-        $node_where = ['state' => true];//查询条件
+        $node_where = [];//['state' => true];//查询条件
         $node_data = ['address' => 1, '_id' => 0, 'pledge' => 1];//查询字段
         $nodes = ProcessManager::getInstance()
                                 ->getRpcCall(NodeProcess::class)
@@ -158,30 +172,33 @@ class NodeController extends Controller
             $super_nodes[] = $nd_key['address'];
             //取质押数
             $new_super_node[$nd_key['address']]['pledge'] = $nd_key['pledge'];
-            $new_super_node[$nd_key['address']]['vote'] = 0;
+            $new_super_node[$nd_key['address']]['totalVote'] = 0;
         }
         //先获取下一轮的投票结果,先设定获取一百万条数据
         $incentive_users = [];//可以享受激励的一千个用户地址
-        $vote_where = ['rounds' => 1, 'address' => ['$in' => $super_nodes]];
+        $vote_where = ['rounds' => $rounds, 'address' => ['$in' => $super_nodes]];
         $vote_sort = ['value' => -1];
         $vote_res = ProcessManager::getInstance()
                                     ->getRpcCall(VoteProcess::class)
                                     ->getVoteList($vote_where, [], 1, 1000000);
-        if(empty($vote_res['Data'])){
-            //没有投票数据，不再执行
-            return $this->http_output->notPut('', '投票数为0');
-        }
-        foreach ($vote_res['Data'] as $vr_key => $vr_val){
-            //组装各节点前1000名用户投票数据
-            $incentive_users[$vr_val['address']][] = [
-                'address'   => $vr_val['address'],
-                'value'     => $vr_val['value'],
-            ];
-            //取投票总质押
-            $new_super_node[$vr_val['address']]['totalVote'] += $vr_val['value'];
+        if(!empty($vote_res['Data'])){
+            foreach ($vote_res['Data'] as $vr_key => $vr_val){
+                //组装各节点前1000名用户投票数据
+                $incentive_users[$vr_val['address']][] = [
+                    'address'   => $vr_val['address'],
+                    'value'     => $vr_val['value'],
+                ];
+                //取投票总质押
+                $new_super_node[$vr_val['address']]['totalVote'] += 1;
+            }
         }
         //拼接节点数据
         foreach ($new_super_node as $nsn_key => $nsn_val){
+            if(!isset($incentive_users[$nsn_key])){
+                $new_super_node[$nsn_key]['voters'] = [];
+                $new_super_node[$nsn_key]['address'] = $nsn_key;
+                continue;
+            }
             $new_super_node[$nsn_key]['voters'] = $incentive_users[$nsn_key];
             $new_super_node[$nsn_key]['address'] = $nsn_key;
         }
@@ -197,10 +214,10 @@ class NodeController extends Controller
     {
         $super_nodes = [];//存储超级节点数据
         $super_where = [];//查询条件
-        $super_data = ['_id' => 0];//查询字段
+        $super_data = ['_id' => 0, 'ip' => 0, 'port' => 0];//查询字段
         $super_nodes = ProcessManager::getInstance()
                                         ->getRpcCall(SuperNodeProcess::class)
-                                        ->getVoteList($super_where, $super_data, 1, 1000);
+                                        ->getSuperNodeList($super_where, $super_data, 1, 1000);
         return $this->http_output->lists($super_nodes['Data']);
 
     }
@@ -221,11 +238,30 @@ class NodeController extends Controller
      * 返回系统时间
      * @param $parem
      */
-    public function tcp_getSystemTime($parem)
+    public function http_getSystemTime()
     {
-        return $this->send($parem);
-    }
+        //获取当前轮次
+        $rounds = ProcessManager::getInstance()
+                                ->getRpcCall(TimeClockProcess::class)
+                                ->getRounds();
 
+        //获取当前系统运行时间
+        $sys_time = ProcessManager::getInstance()
+                                ->getRpcCall(TimeClockProcess::class)
+                                ->getCreationTime();
+
+        //获取当前轮次时间
+        $this_time = ProcessManager::getInstance()
+                                ->getRpcCall(TimeClockProcess::class)
+                                ->getNowTime();
+        $res = [
+            'rounds'        =>  $rounds,
+            'sysTime'       =>  $sys_time,
+            'thisTime'      =>  $this_time,
+        ];
+
+        return $this->http_output->lists($res);
+    }
 
     public function http_examinationNode()
     {
