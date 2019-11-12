@@ -30,6 +30,12 @@ class TradingController extends Controller
     protected $BlockModel;
 
     /**
+     * 钱包模型
+     * @var
+     */
+    protected $PurseModel;
+
+    /**
      * 交易处理模型
      * @var
      */
@@ -46,6 +52,7 @@ class TradingController extends Controller
      * @var
      */
     protected $TradingEncodeModel;
+
     protected function initialization($controller_name, $method_name)
     {
         parent::initialization($controller_name, $method_name);
@@ -55,6 +62,8 @@ class TradingController extends Controller
         $this->TradingModel = $this->loader->model('Trading/TradingModel', $this);
         //调用区块模型
         $this->BlockModel = $this->loader->model('Block/BlockBaseModel', $this);
+        //调用钱包模型
+        $this->PurseModel = $this->loader->model('Purse/PurseModel', $this);
         //调用创建交易模型
         $this->CreateTradingModel = $this->loader->model('Trading/CreateTradingModel', $this);
         //调用交易序列化模型
@@ -64,10 +73,21 @@ class TradingController extends Controller
     /**
      * 查看钱包接口
      */
-    public function http_checkProus()
+    public function http_selectProus()
     {
-        $purses = CatCacheRpcProxy::getRpc()->offsetGet('purses');
-        return $this->http_output->lists($purses);
+        $select_where = $this->http_input->getAllPostGet();
+        $purse_where = [];
+        if(empty($select_where['address'])){
+            return returnError('请输入要查询的账户地址.');
+        }
+        $purse_where['address'] = $select_where['address'];
+        $purse_data = [];
+        $page = $select_where['page'] ?? 1;
+        $pagesize = $select_where['pagesize'] ?? 100;
+
+        $purse_res = $this->PurseModel->getPurseFromMongoDb($purse_where, $purse_data, intval($page), intval($pagesize));
+        sort($purse_res);
+        return $this->http_output->lists($purse_res);
     }
 
     /**
@@ -137,6 +157,9 @@ class TradingController extends Controller
                                         ->setPrivateKey($trading['privateKey'])
                                         ->setPublicKey($trading['publicKey'])
                                         ->encodeTrading();
+        if($res == false){
+            return $this->http_output->notPut('', '交易有误');
+        }
         return $this->http_output->lists($res);
     }
 
@@ -147,6 +170,9 @@ class TradingController extends Controller
     {
         $trading = $this->http_input->getAllPostGet();
         $res = $this->TradingEncodeModel->decodeTrading($trading['trading']);
+        if($res == false){
+            return $this->http_output->notPut('', '交易有误.');
+        }
         return $this->http_output->lists($res);
     }
 
@@ -174,6 +200,9 @@ class TradingController extends Controller
 
         //反序列化交易
         $decode_trading = $this->TradingEncodeModel->decodeTrading($trading_data['trading']);
+        if($decode_trading == false){
+            return $this->http_output->notPut('', '交易有误.');
+        }
         //空着等对接
         if($trading_data['renoce'] != ''){
             //判断交易质押类型是否可以撤销
@@ -255,19 +284,5 @@ class TradingController extends Controller
         return $this->http_output->lists($query_res['Data']);
     }
 
-    /**
-     * 查询区块接口
-     */
-    public function http_queryBlock()
-    {
-        $block = $this->http_input->getAllPostGet();
-        if(empty($block['headHash'])){
-            return $this->http_output->notPut('', '请传入要查询的区块hash!');
-        }
-        $query_res = $this->BlockModel->queryBlock($block['headHash']);
-        if(!$query_res['IsSuccess']) return $this->http_output->notPut('', '交易异常!');
-        //返回查询结果
-        return $this->http_output->lists($query_res['Data']);
-    }
 
 }
