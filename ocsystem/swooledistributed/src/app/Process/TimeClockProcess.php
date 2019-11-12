@@ -144,14 +144,25 @@ class TimeClockProcess extends Process
     }
 
     /**
+     * 获取时间钟差值
+     * @return int
+     */
+    public function getNowTime() : int
+    {
+        return (ceil(getTickTime() / 1000) - $this->getDifference()) % 126;
+    }
+
+    /**
      * 运行时间钟
      * @oneWay
      */
     public function runTimeClock()
     {
             if ($this->clockState) {
+//        if (true) {
                 var_dump('当前时间'.(ceil(getTickTime() / 1000) - $this->getDifference()) % 126);
                 if ((ceil(getTickTime() / 1000) - $this->getDifference()) % 126 <= 0){
+//            if (true){
                     //先关闭节点
                     //关闭工作
                     ProcessManager::getInstance()
@@ -173,7 +184,6 @@ class TimeClockProcess extends Process
                     /**
                      * 开始统计投票，决定下一轮的超级节点
                      */
-                    var_dump($this->getRounds());
                     $rotation_res = ProcessManager::getInstance()
                                         ->getRpcCall(NodeProcess::class)
                                         ->rotationSuperNode($this->getRounds());

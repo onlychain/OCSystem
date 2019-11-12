@@ -336,6 +336,7 @@ class PeerProcess extends Process
         $res = [];//验证返回结果
         $decode_content = json_decode($content, true);
         var_dump('收到广播数据广播类型：'.$decode_content['broadcastType']);
+        return;
         //根据具体的广播数据进行处理，不合法就不再进行广播
         switch ($decode_content['broadcastType']){
             case 'Block' :

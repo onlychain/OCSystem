@@ -431,6 +431,8 @@ class TradingProcess extends Process
                         return returnError('当前交易不可用');
                     }
                 }else{
+                    var_dump($top_block_height);
+                    var_dump($purses[$tx['txId']]['lockTime']);
                     if($top_block_height >= $purses[$tx['txId']]['lockTime']){
                         return returnError('当前已被解锁');
                     }

@@ -200,6 +200,7 @@ class ConsensusProcess extends Process
         if ($this->Identity == 'core' && $this->openConsensus){
             //判断是否到自己出块
             $is_work = $this->getIsCore($now_time, 3);
+//            $is_work = true;
             if($is_work){
                 var_dump("=========================================开始出块=========================================");
                 var_dump(date('Y-m-d H:i:s'));
@@ -596,6 +597,7 @@ class ConsensusProcess extends Process
 //        }
         //计算需要给当前节点前1000用户的代币
         if(!empty($voter)){
+            var_dump($voter);
             $tradings_temp = $this->calculateVoterReward($table_num, array_slice($voter, 0, 1000), $incentives, $work_time);
             $tradings[] = $tradings_temp['Data']['trading'][0];
             count($tradings_temp['Data']['trading']) == 2 && $tradings[] = $tradings_temp['Data']['trading'][1];
@@ -635,7 +637,6 @@ class ConsensusProcess extends Process
         $tokens = $tokens / $this->yearBlockNum;
         $total_pledge = array_sum(array_column($voters, 'value'));
         //组装成交易
-
         $trading = [];//存储交易内容
         //最多只有前1000个用户
         $trading['tx'][0]['coinbase'] = 'No one breather who is worthier.';
@@ -649,7 +650,6 @@ class ConsensusProcess extends Process
                     'type'      =>  1,
                 ];
             }
-
         }
         //进行序列化
         $tradings[] = $this->TradingEncode->setVin($trading['tx'])
@@ -728,7 +728,7 @@ class ConsensusProcess extends Process
         //开始计算激励交易金额
         $tokens = floor($tokens / $this->yearRoundsNum);
         //加上上一轮的结余
-        $tokens += $incentives[$table_num - 1]['noder']['balance'];
+        $tokens += $incentives[$table_num]['noder']['balance'];
         //组装成交易
         $trading = [];//存储交易内容
         //排名前30个节点，按照比例进行分配
@@ -754,6 +754,9 @@ class ConsensusProcess extends Process
             //按照1:0.001比例进行分配
             foreach ($nodes as $nd_key => $nd_val){
                 $reward += $nd_val['value'] / 1000;
+                if($nd_val['value'] / 1000 <= 0){
+                    continue;
+                }
                 $trading['to'][] = [
                     'address'   =>  $nd_key,
                     'type'      =>  1,

@@ -109,6 +109,9 @@ class TestController extends Controller
                                         ->setPrivateKey($trading['privateKey'])
                                         ->setPublicKey($trading['publicKey'])
                                         ->encodeTrading($trading);
+        if($res == false){
+            return $this->http_output->notPut('', '交易有误');
+        }
         return $this->http_output->lists($res);
     }
 
@@ -119,6 +122,9 @@ class TestController extends Controller
     {
         $trading = $this->http_input->getAllPostGet();
         $res = $this->TradingEncodeModel->decodeTrading($trading['trading']);
+        if($res == false){
+            return $this->http_output->notPut('', '交易有误.');
+        }
         return $this->http_output->lists($res);
     }
 
@@ -156,6 +162,9 @@ class TestController extends Controller
         }
         //反序列化交易
         $decode_trading = $this->TradingEncodeModel->decodeTrading($trading_data['trading']);
+        if($decode_trading == false){
+            return $this->http_output->notPut('', '交易有误.');
+        }
         //验证交易是否可用$decode_trading;
         $check_res = ProcessManager::getInstance()
                                 ->getRpcCall(TradingProcess::class)

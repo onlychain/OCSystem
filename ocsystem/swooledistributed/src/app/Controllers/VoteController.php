@@ -79,6 +79,9 @@ class VoteController extends Controller
 
         //反序列化交易
         $decode_trading = $this->TradingEncodeModel->decodeTrading($vote_data['pledge']['trading']);
+        if($decode_trading == false){
+            return $this->http_output->notPut('', '交易有误.');
+        }
         if($decode_trading['lockType'] != 2){
             return $this->http_output->notPut('', '质押类型有误.');
         }
@@ -174,6 +177,9 @@ class VoteController extends Controller
                                                 ->setPrivateKey($vote_data['privateKey'])
                                                 ->setPublicKey($vote_data['publicKey'])
                                                 ->encodeTrading();
+        if($vote_trading == false){
+            return $this->http_output->notPut('', '交易有误');
+        }
         return $this->http_output->lists($vote_trading);
     }
 
