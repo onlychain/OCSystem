@@ -49,10 +49,19 @@ class BlockController extends Controller
     public function http_queryBlock()
     {
         $block = $this->http_input->getAllPostGet();
-        if(empty($block['headHash'])){
-            return $this->http_output->notPut('', '请传入要查询的区块hash!');
+        $where = [];
+        if(!empty($block['headHash'])){
+            $where['headHash'] = $block['headHash'];
         }
-        $query_res = $this->BlockModel->queryBlock($block['headHash']);
+
+        if(!empty($block['height'])){
+            $where['height'] = $block['height'];
+        }
+
+        if(empty($where)){
+            return $this->http_output->notPut('', '请输入区块查询条件!');
+        }
+        $query_res = $this->BlockModel->queryBlock($where);
         if(!$query_res['IsSuccess']) return $this->http_output->notPut('', '交易异常!');
         //返回查询结果
         return $this->http_output->lists($query_res['Data']);

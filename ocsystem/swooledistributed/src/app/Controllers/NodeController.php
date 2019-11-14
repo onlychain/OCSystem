@@ -2,6 +2,7 @@
 namespace app\Controllers;
 
 use app\Models\AppModel;
+use BitcoinPHP\BitcoinECDSA\BitcoinECDSA;
 use Server\CoreBase\Controller;
 use Server\Asyn\TcpClient\SdTcpRpcPool;
 use Server\CoreBase\SwooleException;
@@ -238,7 +239,7 @@ class NodeController extends Controller
      * 返回系统时间
      * @param $parem
      */
-    public function http_getSystemTime()
+    public function http_getSystemInfo()
     {
         //获取当前轮次
         $rounds = ProcessManager::getInstance()
@@ -254,10 +255,22 @@ class NodeController extends Controller
         $this_time = ProcessManager::getInstance()
                                 ->getRpcCall(TimeClockProcess::class)
                                 ->getNowTime();
+        //获取当前区块高度
+        $top_block_hash = ProcessManager::getInstance()
+                                ->getRpcCall(BlockProcess::class)
+                                ->getTopBlockHash();
+        //获取最高区块哈希
+        $top_block_height = ProcessManager::getInstance()
+                                ->getRpcCall(BlockProcess::class)
+                                ->getTopBlockHeight();
+
+
         $res = [
-            'rounds'        =>  $rounds,
-            'sysTime'       =>  $sys_time,
-            'thisTime'      =>  $this_time,
+            'rounds'            =>  $rounds,
+            'sysTime'           =>  $sys_time,
+            'thisTime'          =>  $this_time,
+            'blockHash'         =>  $top_block_hash,
+            'blockHeight'       =>  $top_block_height,
         ];
 
         return $this->http_output->lists($res);
