@@ -14,7 +14,6 @@ use Server\CoreBase\ChildProxy;
 use Server\CoreBase\SwooleException;
 use Server\Components\CatCache\TimerCallBack;
 use Server\Components\CatCache\CatCacheRpcProxy;
-use MongoDB;
 
 class TradingUTXOModel extends Model
 {

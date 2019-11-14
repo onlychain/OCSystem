@@ -120,7 +120,7 @@ class TradingModel extends Model
         //验证交易
         if(empty($trading)) return returnError('请输入交易内容!');
         //把交易存入交易池数据库
-        $new_utxo['_id']    = bin2hex(hash('sha256', hash('sha256', hex2bin($trading['trading']), true), true));
+        $new_utxo['_id']    = bin2hex(hash('sha256', hex2bin($trading['trading']), true));
         $new_utxo['trading'] = $trading['trading'];
         $new_utxo['noce'] = $trading['noce'];
         $insert_res = ProcessManager::getInstance()
@@ -147,7 +147,7 @@ class TradingModel extends Model
         //把交易存入交易池数据库
         foreach ($tradings as $t_key => $t_val){
             $new_utxos[] = [
-                '_id'       =>  bin2hex(hash('sha256', hash('sha256', hex2bin($t_val), true), true)),
+                '_id'       =>  bin2hex(hash('sha256',  hex2bin($t_val), true)),
                 'trading'   =>  $t_val,
                 'noce'      =>  'ffffffff',
                 'time'      =>  time()
@@ -188,6 +188,9 @@ class TradingModel extends Model
         if(!empty($trading['Data'])){
             //把交易反序列化
             $trading_res = $this->TradingEncodeModel->decodeTrading($trading['Data']['trading']);
+            if($trading_res == false){
+                return returnError('交易有误.');
+            }
         }
         return returnSuccess($trading_res);
     }
@@ -236,6 +239,9 @@ class TradingModel extends Model
 
         //反序列化交易
         $decode_trading = $this->TradingEncodeModel->decodeTrading($trading_data['trading']);
+        if($decode_trading == false){
+            return returnError('交易有误.');
+        }
         //判断是否是coinbase交易
         if(!empty($decode_trading['vin'][0]['coinbase'])){
             if($type == 2){
@@ -248,7 +254,7 @@ class TradingModel extends Model
         //空着等对接
         if(!empty($trading_data['renoce']) || $trading_data['renoce'] != ''){
             //判断交易质押类型是否可以撤销
-            if(in_array($decode_trading['lockType'],[2,3])){
+            if(in_array($decode_trading['lockType'],[2,3,4])){
                 return returnError('该交易无法重置.');
             }
             //执行撤回交易
@@ -295,7 +301,7 @@ class TradingModel extends Model
     protected function delSycnCoinbase(string $coinbase = '')
     {
         //查看交易是否存在，不存在则存入
-        $tx_id = bin2hex(hash('sha256', hash('sha256', hex2bin($coinbase), true), true));
+        $tx_id = bin2hex(hash('sha256', hex2bin($coinbase), true));
         $check_repeat = $this->queryTrading($tx_id);
         if(!empty($check_repeat['Data'])){
             return returnError('交易已存在');
