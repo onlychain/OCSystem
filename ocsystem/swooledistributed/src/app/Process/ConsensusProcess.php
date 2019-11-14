@@ -262,7 +262,7 @@ class ConsensusProcess extends Process
                                                     ->setSignature(get_instance()->config['name'])//工作者签名
                                                     ->setHeight($top_block_height + 1)//区块高度先暂存，后期不上
                                                     ->setTxNum($trading_num)
-                                                    ->setTradingInfo($tradings)
+                                                    ->setTradingInfo($encode_trading)
                                                     ->packBlockHead();
                     $this->Block[$block_head['headHash']] = $block_head;
                     $this->Block[$block_head['headHash']]['state'] = true;
@@ -316,7 +316,6 @@ class ConsensusProcess extends Process
         if($check_block['createder'] != get_instance()->config['address'] && $check_block['createder'] == $check_block['id']){
             //还没有验证过区块，先验证，只存储确认过的区块数据
             if(empty($this->Block[$check_block['data']['headHash']])){
-                var_dump(9);
                 $this->ConsensusResult[$check_block['data']['headHash']][$check_block['createder']] = true;
                 $this->ConsensusResult[$check_block['data']['headHash']]['out_time'] = time();
                 $this->Block[$check_block['data']['headHash']]['state'] = true;
@@ -425,6 +424,8 @@ class ConsensusProcess extends Process
             $this->bookedPurse($encode_trading);
             //清空被使用的交易缓存
             CatCacheRpcProxy::getRpc()['Using'] = [];
+            //清理用户交易次数
+            ProcessManager::getInstance()->getRpcCall(TradingProcess::class, true)->clearTradingNunm();
             var_dump("=========================================区块哈希=========================================");
             var_dump(count($this->ConsensusResult));
             var_dump(count($this->Block));
@@ -529,7 +530,7 @@ class ConsensusProcess extends Process
                                                     ->setPublicKey($incetive_new['publicKey'])
                                                     ->encodeTrading();
         $insert_data['trading'] = $incentive_trading;
-        $insert_data['_id']     =  bin2hex(hash('sha256', hash('sha256', hex2bin($incentive_trading), true), true));
+        $insert_data['_id']     =  bin2hex(hash('sha256', hex2bin($incentive_trading), true));
         //插入数据库
         $check_res = ProcessManager::getInstance()
                                     ->getRpcCall(TradingPoolProcess::class)
@@ -829,6 +830,8 @@ class ConsensusProcess extends Process
                     'value'     =>  $dt_val['value'],
                     'reqSigs'   =>  $dt_val['reqSigs'],
                     'lockTime'  =>  $decode_trading['lockTime'],
+                    'lockBlock'  =>  $decode_trading['lockBlock'],
+                    'lockType'  =>  $decode_trading['lockType'],
                 ];
                 //处理缓存数据
                 $cache_purse[$dt_val['address']][] = [
@@ -837,6 +840,8 @@ class ConsensusProcess extends Process
                     'value'     =>  $dt_val['value'],
                     'reqSigs'   =>  $dt_val['reqSigs'],
                     'lockTime'  =>  $decode_trading['lockTime'],
+                    'lockBlock'  =>  $decode_trading['lockBlock'],
+                    'lockType'  =>  $decode_trading['lockType'],
                 ];
             }
         }

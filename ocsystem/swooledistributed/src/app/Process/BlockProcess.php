@@ -355,11 +355,16 @@ class BlockProcess extends Process
             return returnError('请传入交易哈希头!');
         }
         //将交易数据存入交易集合
-        $trading_res =  ProcessManager::getInstance()
-                                    ->getRpcCall(TradingProcess::class)
-                                    ->insertTradingMany($tradings);
-        if(!$trading_res['IsSuccess']){
-            return returnError($trading_res['Message']);
+//        $trading_res =  ProcessManager::getInstance()
+//                                    ->getRpcCall(TradingProcess::class)
+//                                    ->insertTradingMany($tradings);
+//        if(!$trading_res['IsSuccess']){
+//            return returnError($trading_res['Message']);
+//        }
+        if(empty($trading_hashs)){
+            foreach ($tradings as $t_key => $t_val){
+                $trading_hashs[] = bin2hex(hash('sha256', hex2bin($t_val), true));
+            }
         }
         //删除交易池内的交易数据
         $trading_pool_where = ['_id' => ['$in' => $trading_hashs]];
@@ -621,7 +626,7 @@ class BlockProcess extends Process
                                                         ->setIns('')
                                                         ->encodeTrading();
             }
-            $tx_id = bin2hex(hash('sha256', hash('sha256', hex2bin($trading_info), true), true));
+            $tx_id = bin2hex( hash('sha256', hex2bin($trading_info), true));
             $tx_ids[] = $tx_id;
             $trading[] = [
                 '_id'   =>  $tx_id,
