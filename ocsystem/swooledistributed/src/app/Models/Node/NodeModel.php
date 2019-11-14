@@ -196,6 +196,9 @@ class NodeModel extends Model
 
         //反序列化交易['pledge']
         $decode_trading = $this->TradingEncodeModel->decodeTrading($node_data['pledge']['trading']);
+        if($decode_trading == false){
+            return returnError('交易有误.');
+        }
         //判断质押类型是否有误
         if($decode_trading['lockType'] != 3)
             return returnError('质押类型有误!');
@@ -222,7 +225,7 @@ class NodeModel extends Model
         }
 
         //交易验证成功，质押写入数据库
-        $check_node['address'] = $node_data['address'];
+        $check_node['address'] = $node_data['noder'];
         $check_node['ip']   = $node_data['ip'];
         $check_node['port'] = $node_data['port'];
         $check_node['txId'] = $decode_trading['txId'];
@@ -278,6 +281,9 @@ class NodeModel extends Model
      */
     public function syncNode(array $node = [])
     {
+        if($this->NodeState){
+            return returnError('备选节点已同步');
+        }
         if(empty($node)){
             return returnError('节点为空');
         }
@@ -299,6 +305,7 @@ class NodeModel extends Model
         ProcessManager::getInstance()
                     ->getRpcCall(NodeProcess::class, true)
                     ->insertNodeMany($node);
+        $this->NodeState = true;
         return returnSuccess();
     }
 }

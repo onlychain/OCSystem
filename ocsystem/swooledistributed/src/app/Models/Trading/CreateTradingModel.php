@@ -168,8 +168,9 @@ class CreateTradingModel extends Model
             //超级节点质押锁仓
             case 3: $lock_time = $top_block_height + 15768000;
                 break;
-            //锁死，目前锁200年
-            case 4: $lock_time = 4294967295;
+            //目前是质押1年
+//            case 4: $lock_time = 4294967295;
+            case 4: $lock_time = $top_block_height + 15768000;
                 break;
             //默认情况，默认为类型1
             default : $lock_time = 0;

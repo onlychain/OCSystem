@@ -302,12 +302,15 @@ class VoteModel extends Model
 //        }
 
         $check_vote['rounds'] = $vote_data['rounds'];//所投轮次
-        $check_vote['voter'] = $vote_data['voter'];//质押人员
+        $check_vote['voter'] = $vote_data['address'];//质押人员
         $vote_type = $vote_data['voteAgain'] ?? 1;//投票类型
 
         //反序列化交易
         if(!empty($vote_data['pledge']['trading'])){
             $decode_trading = $this->TradingEncodeModel->decodeTrading($vote_data['pledge']['trading']);
+            if($decode_trading == false){
+                return returnError('交易有误.');
+            }
             if($decode_trading['lockType'] != 2){
                 return returnError('质押类型有误.');
             }
@@ -352,7 +355,7 @@ class VoteModel extends Model
         }
 
         //交易验证成功，投票写入数据库
-        $check_vote['address'] = $vote_data['address'];
+        $check_vote['address'] = $vote_data['noder'];
         $vote_res = $this->submitVote($check_vote, $check_vote_res['Data']['flag']);
         if(!$vote_res['IsSuccess']){
             return returnError($vote_res['Message']);
