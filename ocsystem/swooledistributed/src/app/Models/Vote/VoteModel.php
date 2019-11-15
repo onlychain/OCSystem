@@ -74,4 +74,42 @@ class VoteModel extends Model
         return returnSuccess($result, '查询地址列表');
     }
 
+
+    /**
+     * 添加地址本
+     *
+     * @param $data
+     *
+     * @return bool
+     */
+    public function inserAddressBook($data)
+    {
+        if (empty($data['address'])) return returnError('地址不能为空');
+        if (empty($data['addressBook'])) return returnError('地址本不能为空');
+        if (empty($data['remark'])) return returnError('备注不能为空');
+        $result = $this->VoteData->info('*')
+                                 ->from('t_address_book')
+                                 ->where("", "`address_uuid` = '" . $data['address'] . "' AND `address_book` = '" . $data['addressBook'] . "'", 'RAW')
+                                 ->query();
+        $result = $result['result'];
+        if (!$result) {
+            $addressBook = [
+                $data['address'],
+                $data['addressBook'],
+                $data['remark'],
+                time()
+            ];
+            $res = $this->VoteData->insertInto('t_address_book')
+                                  ->intoColumns(['address_uuid', 'address_book', 'remark', 'created'])
+                                  ->intoValues($addressBook)
+                                  ->query();
+            if ($res) {
+                return returnSuccess('', '添加地址成功');
+            } else {
+                return returnError('添加地址失败');
+            }
+        } else {
+            return returnError('该地址存在');
+        }
+    }
 }

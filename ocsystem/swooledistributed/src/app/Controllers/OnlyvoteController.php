@@ -52,4 +52,18 @@ class OnlyvoteController extends Controller
         return $this->http_output->lists($res['Data']);
     }
 
+    /**
+     * 添加地址本
+     */
+    public function http_inserAddressBook()
+    {
+        $data = $this->http_input->getAllPostGet();
+        $res = $this->VoteClass->inserAddressBook($data);
+        if (!$res['IsSuccess']) {
+            return $this->http_output->notPut('', $res['Message']);
+        }
+        return $this->http_output->lists($res);
+    }
+
+
 }
