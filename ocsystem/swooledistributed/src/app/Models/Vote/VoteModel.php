@@ -38,7 +38,7 @@ class VoteModel extends Model
         $this->VoteConfig = get_instance()->config->get('site');
     }
 
-    
+
     /**
      * 请求创建地址及密钥，公钥(保留着)
      * @param array $data
@@ -56,5 +56,22 @@ class VoteModel extends Model
         return $res;
     }
 
+    /**
+     * 获取地址本列表
+     *
+     * @param $address
+     *
+     * @return bool
+     */
+    public function getAddressList($address)
+    {
+        if (empty($address)) return returnError('地址不能为空');
+        $result = $this->VoteData->select('*')
+            ->from('t_address_book')
+            ->where("", " `address_uuid` = '" . $address . "' AND is_del = 1", 'RAW')
+            ->query();
+        $result = $result['result'];
+        return returnSuccess($result, '查询地址列表');
+    }
 
 }

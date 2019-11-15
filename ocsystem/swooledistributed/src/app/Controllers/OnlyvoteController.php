@@ -38,4 +38,18 @@ class OnlyvoteController extends Controller
         return $this->http_output->lists($result);
     }
 
+
+    /**
+     * 获取地址
+     */
+    public function http_getAddressList()
+    {
+        $address = $this->http_input->getPost('address');
+        $res = $this->VoteClass->getAddressList($address);
+        if (!$res['IsSuccess']) {
+            return $this->http_output->notPut('', $res['Message']);
+        }
+        return $this->http_output->lists($res['Data']);
+    }
+
 }
