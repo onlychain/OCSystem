@@ -10,8 +10,9 @@ class OnlyvoteController extends Controller
 {
     public $VoteClass;
 
-    protected function initialization($controller_name, $method_name){
-        parent::initialization($controller_name,$method_name);
+    protected function initialization($controller_name, $method_name)
+    {
+        parent::initialization($controller_name, $method_name);
         $this->VoteClass = $this->loader->model('Vote/VoteModel', $this);//商品公共方法
     }
 
@@ -63,6 +64,19 @@ class OnlyvoteController extends Controller
             return $this->http_output->notPut('', $res['Message']);
         }
         return $this->http_output->lists($res);
+    }
+
+    /**
+     * 查看钱包获取only
+     */
+    public function http_onlyMoney()
+    {
+        $address = $this->http_input->getAllPostGet();
+        $res = $this->VoteClass->selectProus($address);
+        if (!$res['IsSuccess']) {
+            return $this->http_output->notPut('', $res['Message']);
+        }
+        return $this->http_output->lists($res['Data']);
     }
 
 
