@@ -112,4 +112,17 @@ class VoteModel extends Model
             return returnError('该地址存在');
         }
     }
+
+    /**
+     * 拥有only
+     * @param array $address
+     *
+     * @return bool
+     */
+    public function selectProus($address = [])
+    {
+        if (empty($address['address'])) return returnError('地址不能为空');
+        $res = $this->walletMoney($address['address']);
+        return returnSuccess($res, '请求成功');
+    }
 }
