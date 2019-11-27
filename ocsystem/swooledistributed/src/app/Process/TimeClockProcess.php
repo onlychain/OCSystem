@@ -206,7 +206,6 @@ class TimeClockProcess extends Process
                     ProcessManager::getInstance()
                                 ->getRpcCall(CoreNetworkProcess::class)
                                 ->rushSuperNodeLink();
-                    var_dump('rush over');
                     if ($rotation_res['Data']['index'] == 0) {
                         //设置节点身份
                         ProcessManager::getInstance()
@@ -246,7 +245,7 @@ class TimeClockProcess extends Process
                 ProcessManager::getInstance()
                     ->getRpcCall(ConsensusProcess::class, true)
                     ->chooseWork(ceil(getTickTime() / 1000) - $this->getDifference() % 126);
-                var_dump((ceil(getTickTime() / 1000) - $this->getDifference()) % 126);
+//                var_dump((ceil(getTickTime() / 1000) - $this->getDifference()) % 126);
             }
     }
 

@@ -208,6 +208,8 @@ class TradingPoolProcess extends Process
 //        $delete_where['_id'] = $new_where['_id'];
         $delete_res = $this->TradingPool->deleteMany($delete_where);
         if(!$delete_res){
+            var_dump(66666);
+            var_dump($delete_res);
             return returnError('删除失败!');
         }
         return returnSuccess();
@@ -225,7 +227,7 @@ class TradingPoolProcess extends Process
         }
         //先查询交易
         $where = [
-            '_id' => bin2hex(hash('sha256', hex2bin($recall_trading['trading']), true)),
+            '_id' => bin2hex(hash('sha256', hash('sha256', hex2bin($recall_trading['trading']), true), true)),
             'noce' => $recall_trading['renoce']
         ];
         $data = [];
@@ -266,7 +268,7 @@ class TradingPoolProcess extends Process
             return returnError('请输入要替换的交易!');
         }
         //先查询交易
-        $where = ['_id'  => bin2hex(hash('sha256', hex2bin($recall_trading['trading']), true)),
+        $where = ['_id'  => bin2hex(hash('sha256', hash('sha256', hex2bin($recall_trading['trading']), true), true)),
                   'noce' => $recall_trading['renoce']];
         $data = [];
         $old_trading = $this->getTradingPoolInfo($where, $data);
@@ -276,7 +278,7 @@ class TradingPoolProcess extends Process
         $old_trading = $this->EncodeTrading->decodeTrading($old_trading['Data']['trading']);
         //删除该交易
         $del_where = [
-            '_id'   =>  bin2hex( hash('sha256', hex2bin($recall_trading['trading']), true)),
+            '_id'   =>  bin2hex( hash('sha256', hash('sha256', hex2bin($recall_trading['trading']), true), true)),
             'noce'  =>  $recall_trading['renoce'],
         ];
         $del_trading = $this->deleteTradingPool($del_where);

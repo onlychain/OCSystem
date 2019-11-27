@@ -242,7 +242,6 @@ class VoteProcess extends Process
     public function updateVoteMany($where = [], $data = [])
     {
         $update_res = $this->Vote->updateMany($where, $data, ['upsert' => true, 'multi' => true]);
-        var_dump($update_res);
         if(!$update_res->isAcknowledged()){
             return returnError('修改失败!');
         }

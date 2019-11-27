@@ -373,8 +373,7 @@ class TradingProcess extends Process
         $top_block_height = ProcessManager::getInstance()
                                         ->getRpcCall(BlockProcess::class)
                                         ->getTopBlockHeight();
-
-        if(abs($trading['lockBlock'] - $top_block_height) > 10){
+        if($type == 1 && !empty($trading) && abs($trading['lockBlock'] - $top_block_height) > 10){
             return returnError('交易当前锁定时间有误!');
         }
         //定义全局变量
@@ -389,22 +388,26 @@ class TradingProcess extends Process
         if(empty($trading) || !in_array($trading['lockType'], [3,4])){
             //循环查看是否有权限质押交易
             foreach ($purses as $p_key => $k_val){
-                if(($k_val['lockTime'] - $k_val['lockBlock']) >= 15768000){
+                if(($k_val['lockTime'] - $k_val['lockBlock'] + 63) >= 15768000){
                     $equity += $k_val['value'];
                 }
             }
+        }else{
+            $equity = 50000000000;
         }
+
         //判断是否有交易权限
-        if($equity < 500){
+        if($equity < 50000000000){
             return returnError('没有交易权限，请先质押相应的only开启权限。');
         }
         //有交易权限但是笔数超了
-        if($equity < 5000 && (intval($this->TradingNum[$address]) + count($trading['vout'])) > 5){
+        $count_trading = $this->TradingNum[$address] ?? 0;
+        if($equity < 500000000000 && $count_trading + count($trading['vout']) > 5){
             return returnError('没有开通大批量交易权限，请先质押相应的only开启权限');
         }
 
         //没有交易输入，不再往下运行代码
-        if(empty($trading)){
+        if(empty($trading['vout'])){
             return returnSuccess([], '有交易权限，请引入交易输入.');
         }
         $this->Using = CatCacheRpcProxy::getRpc()->offsetGet('Using');
@@ -454,7 +457,10 @@ class TradingProcess extends Process
                 }
 
                 //存储待销毁的交易
-                $del_trading[] =  $tx['txId'];
+                $del_trading[] =  [
+                    'txId'  =>  $tx['txId'],
+                    'n'     =>  $tx['n']
+                ];
                 //解锁函数
                 $check_res = $this->EncodeTrading->checkScriptSig(
                     $tx['txId'],
@@ -499,7 +505,7 @@ class TradingProcess extends Process
             //存入撤回用缓存
             CatCacheRpcProxy::getRpc()['Using'] = $this->Using;
         }
-        $this->TradingNum[$address] += isset($this->TradingNum[$address]) ? count($trading['vout']) : 0;
+        $this->TradingNum[$address] = isset($this->TradingNum[$address]) ? $this->TradingNum[$address] + count($trading['vout']) : 0;
         //删除全局变量
         $del_trading = [];
         return returnSuccess($availabler_ecords);
@@ -718,7 +724,6 @@ class TradingProcess extends Process
             $this->TopBlockHigh = ProcessManager::getInstance()
                                                 ->getRpcCall(BlockProcess::class)
                                                 ->getSyncBlockTopHeight();
-            var_dump($this->TopBlockHigh);
         }
         //循环获取区块数据,每次获取50个区块存储的交易
         if ($this->TopBlockHigh >= $this->BlockIndex){
@@ -730,7 +735,7 @@ class TradingProcess extends Process
                 $tinsert_trading = [];//存储插入的交易
                 foreach ($trading_data as $td_key => $td_val){
                     $trading_txid = '';
-                    $trading_txid = bin2hex(hash('sha256', hex2bin($td_val), true));
+                    $trading_txid = bin2hex(hash('sha256', hash('sha256', hex2bin($td_val), true), true));
                     $sync_txids[] = $trading_txid;
                     $tinsert_trading[] = [
                         '_id'   =>  $trading_txid,
