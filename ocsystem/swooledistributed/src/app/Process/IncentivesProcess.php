@@ -193,9 +193,9 @@ class IncentivesProcess extends Process
      */
     public function deleteIncentivesPoolMany(array $delete_where = [])
     {
-        if(empty($delete_where)){
-            return returnError('请传入删除的条件.');
-        }
+//        if(empty($delete_where)){
+//            return returnError('请传入删除的条件.');
+//        }
         $delete_res = $this->Incentives->deleteMany($delete_where);
         if(!$delete_res){
             return returnError('删除失败!');
@@ -231,11 +231,11 @@ class IncentivesProcess extends Process
      */
     public function setIncentivesTable()
     {
-        $incentives = $this->getIncentivesList();
-        //如果数据库里面没有数据，插入最原始的数据，同时发起共识从别的节点获取数据
-        if(empty($incentives['Data'])){
+//        $incentives = $this->getIncentivesList();
+//        //如果数据库里面没有数据，插入最原始的数据，同时发起共识从别的节点获取数据
+//        if(empty($incentives['Data'])){
             $incentives = $this->originalTable();
-        }
+//        }
         CatCacheRpcProxy::getRpc()['Incentives'] = $incentives['Data'];
         return returnSuccess($incentives['Data']);
     }
@@ -246,7 +246,7 @@ class IncentivesProcess extends Process
     public function originalTable()
     {
         //发起共识，请求数据
-
+        $incentives = [];
         //没有数据的话，从配置文件中载入数据
         if(empty($incentives)){
             $incentives = get_instance()->config['incentives'];
@@ -254,6 +254,7 @@ class IncentivesProcess extends Process
                 $i_val['_id'] = $i_key;
             }
         }
+        $this->deleteIncentivesPoolMany();
         //插入数据库当中
         $this->insertIncentivesMany($incentives);
         return returnSuccess($incentives);

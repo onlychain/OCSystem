@@ -90,7 +90,7 @@ class PeerProcess extends Process
     {
         swoole_timer_tick(10, function (){
             while (p2p_run_one()) {
-				var_dump('空闲等待监听.');
+//				var_dump('空闲等待监听.');
 			}
         });
     }
@@ -147,6 +147,7 @@ class PeerProcess extends Process
     public function p2pGetVal($key = '', $data = [])
     {
         var_dump('发送');
+//        var_dump($this->getNodes());
 		p2p_get($key, $data, function ($values) use($key) {
 		    var_dump('接收回调数据');
             $kes = explode('-', $key);
@@ -155,6 +156,7 @@ class PeerProcess extends Process
                 case 'Block' :
                     var_dump('回调区块同步方法');
                     //执行区块同步函数
+//                var_dump($values);
                     ProcessManager::getInstance()
                                 ->getRpcCall(BlockProcess::class, true)
                                 ->syncBlock($values);
@@ -287,9 +289,21 @@ class PeerProcess extends Process
                 //获取区块数据，key示例Block-1-1000
                 $where = ['headHash' => $val_sha1];
                 $data = ['_id' => 0];
-                $result = json_encode(ProcessManager::getInstance()
+                $full_trading = [];
+                $block = ProcessManager::getInstance()
                                         ->getRpcCall(BlockProcess::class)
-                                        ->getBlockHeadInfo($where, $data)['Data']);
+                                        ->getBlockHeadInfo($where, $data)['Data'];
+                $trading = ProcessManager::getInstance()
+                                        ->getRpcCall(TradingProcess::class)
+                                        ->getTradingList(['_id' => ['$in' => $block['tradingInfo']]], [], 1, count($block['tradingInfo']))['Data'];
+                foreach ($trading as $t_key => $t_val){
+                    $tkey = array_search($t_val['_id'], $block['tradingInfo']);
+                    $full_trading[intval($tkey)] = $t_val['trading'];
+                }
+                ksort($full_trading);
+                $block['tradingInfo'] = $full_trading;
+//                $block['tradingInfo'] = array_column($trading, 'trading');
+                $result = json_encode($block);
                 break;
             case 'Trading' :
                 //获取交易数据，key示例Trading-100
@@ -329,19 +343,19 @@ class PeerProcess extends Process
      */
     public function getBroadcast($sender, $TTL, $content)
     {
-        var_dump($content);
+//        var_dump($content);
         $context = getNullContext();
 //        var_dump($content);
         //反序列化数据
         $res = [];//验证返回结果
         $decode_content = json_decode($content, true);
-        var_dump('收到广播数据广播类型：'.$decode_content['broadcastType']);
-        return;
+//        var_dump('收到广播数据广播类型：'.$decode_content['broadcastType']);
+//        return;
         //根据具体的广播数据进行处理，不合法就不再进行广播
         switch ($decode_content['broadcastType']){
             case 'Block' :
                 $this->BlockModel->initialization($context);
-                $res = $this->BlockModel->checkBlockRequest($decode_content['Data'], 1, 2);
+                $res = $this->BlockModel->checkBlockRequest($decode_content['Data'], 2, 2);
                 break;
             case 'Trading' :
                 $this->TradingModel->initialization($context);
@@ -377,7 +391,7 @@ class PeerProcess extends Process
     public function broadcast(string $content = '')
     {
         var_dump('发送广播');
-        var_dump($this->getNodes());
+//        var_dump($this->getNodes());
         p2p_broadcast($content);
     }
 
