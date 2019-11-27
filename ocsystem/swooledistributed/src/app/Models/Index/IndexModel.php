@@ -44,7 +44,7 @@ class IndexModel extends Model
      */
     public function index()
     {
-        var_dump('==================初始函数==================');
+//        var_dump('==================初始函数==================');
         if(!$this->checkState){
             //判断创世区块是否存在，不存在则插入
             $genesis_block = ProcessManager::getInstance()
@@ -65,7 +65,7 @@ class IndexModel extends Model
         //如果到时间了仍然没有同步到数据，则作为初始节点启动
         $time = date('Y-m-d-H-i-s', time());
         $time = explode('-', $time);
-        var_dump('当前秒针' . $time[5]);
+//        var_dump('当前秒针' . $time[5]);
         if($time[5] == '00' || $time[5] == '30'){
             if(!$clock_state && $sync_clock_height < 10){
                 ProcessManager::getInstance()
@@ -90,8 +90,8 @@ class IndexModel extends Model
              */
             var_dump('同步区块');
             $block_state = ProcessManager::getInstance()
-                ->getRpcCall(BlockProcess::class)
-                ->getBlockState();
+                                        ->getRpcCall(BlockProcess::class)
+                                        ->getBlockState();
             var_dump($block_state);
             if($block_state == 1){
                 //交易未同步，开始同步函数
@@ -102,6 +102,17 @@ class IndexModel extends Model
                 return;
             }elseif($block_state != 3){
                 //交易同步中，未同步完成，等待同步结束
+
+                $a = ProcessManager::getInstance()
+                    ->getRpcCall(BlockProcess::class)
+                    ->getSyncBlockTopHeight();
+                $b = ProcessManager::getInstance()
+                    ->getRpcCall(BlockProcess::class)
+                    ->getCurrentBlock();
+                var_dump('当前高度');
+                var_dump($b);
+                var_dump('目标高度');
+                var_dump($a);
                 var_dump('区块同步未完成');
                 return;
             }
@@ -156,7 +167,7 @@ class IndexModel extends Model
                 $system_time = $top_block['Data'][0]['thisTime'];
                 ProcessManager::getInstance()
                     ->getRpcCall(TimeClockProcess::class, true)
-                    ->delClock($system_time);
+                    ->delClock($system_time + 1);
             }
         }
         //启动任务

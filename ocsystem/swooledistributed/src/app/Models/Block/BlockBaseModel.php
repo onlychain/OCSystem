@@ -55,12 +55,12 @@ class BlockBaseModel extends Model
      * @param string $head_hash
      * @return bool
      */
-    public function queryBlock($head_hash = [])
+    public function queryBlock($head_hash = [], $type = 1)
     {
 
         $block_res = [];
         isset($head_hash['headHash']) && $where['headHash'] = $head_hash['headHash'];
-        isset($head_hash['height']) && $where['height'] = $head_hash['height'];
+        isset($head_hash['height']) && $where['height'] = intval($head_hash['height']);
         if(empty($where)){
             return returnError('请传入区块哈希.');
         }
@@ -68,6 +68,14 @@ class BlockBaseModel extends Model
         $block_res = ProcessManager::getInstance()
                                     ->getRpcCall(BlockProcess::class)
                                     ->getBlockHeadInfo($where, $data);
+        if($type == 2 && !empty($block_res['Data'])){
+            $trading_where = ['_id' => ['$in' => $block_res['Data']['tradingInfo']]];
+            $trading_data = ['_id' => 0];
+            $trading_info = ProcessManager::getInstance()
+                                        ->getRpcCall(TradingProcess::class)
+                                        ->getTradingList($trading_where, $trading_data, 1, count($block_res['Data']['tradingInfo']));
+            $block_res['Data']['tradingInfo'] = array_column($trading_info['Data'], 'trading');
+        }
         return $block_res;
     }
 
@@ -80,15 +88,18 @@ class BlockBaseModel extends Model
      */
     public function checkBlockRequest(array $block_head = [], $trading_type = 1, $is_broadcast = 1)
     {
-        var_dump($block_head);
+//        var_dump($block_head);
+        $trading_info_hashs = [];//存储区块确认的交易摘要
+        $trading_info_all = [];//存储交易摘要和整交易
+        $merkle_leaves = [];//存储默克尔树叶子节点
         //判断区块状态,决定是否要同步数据
-        if($trading_type == 1){
+//        if($is_broadcast == 1){
             $check_block_state = $this->getBlockSituation($block_head);
             if (!$check_block_state['IsSuccess']){
-                var_dump($check_block_state);
+//                var_dump($check_block_state);
                 return returnError($check_block_state['Message']);
             }
-        }
+//        }
 
         //验证上一个区块的哈希是否存在
         $block_where = ['headHash' => ['$in' => [$block_head['parentHash'], $block_head['headHash']]]];
@@ -97,10 +108,14 @@ class BlockBaseModel extends Model
                                     ->getRpcCall(BlockProcess::class)
                                     ->getBloclHeadList($block_where, $block_data, 1, 2, []);
         if(empty($block_res['Data'])){
+            var_dump($block_res['Data']);
+            var_dump($block_where);
+            var_dump($block_head);
             var_dump('区块数据有误，请重启系统进行同步.');
             $is_broadcast == 2 && ProcessManager::getInstance()
                                             ->getRpcCall(BlockProcess::class, true)
                                             ->setBlockState(1);
+            $this->getBlockSituation($block_head);
             return returnError('区块数据有误，请重启.');
 //            var_dump(2);
 //            //判断数据库是否有区块数据
@@ -130,80 +145,86 @@ class BlockBaseModel extends Model
             var_dump('区块数据有误');
             return returnError('区块数据有误');
         }
-        //获取交易摘要
-        $trading_hashs = [];
-        foreach ($block_head['tradingInfo'] as $t_key => $t_val){
-            $trading_hashs[] = bin2hex(hash('sha256', hex2bin($t_val), true));
-        }
-        if($trading_type != 1){
+        if($trading_type == 1) {
             //验证交易是否都存在
-            $trading_where = ['_id' => ['$in' => $block_head['tradingInfo']]];
-            $trading_data = ['trading' => 0, 'time' => 0];
+            $trading_info_hashs = $block_head['tradingInfo'];
+            $trading_where = ['_id' => ['$in' => $trading_info_hashs]];
+            $trading_data = ['time' => 0, '_id' => 0, 'noce' => 0];
             $trading_res = [];
             //查询交易池内容
             $trading_res = ProcessManager::getInstance()
-                ->getRpcCall(TradingPoolProcess::class)
-                ->getTradingPoolList($trading_where, $trading_data, 1, count($trading_hashs));
-            $trading_res['Data'] = $trading_hashs;
-            var_dump('-------------=-------------=-----------------');
-            var_dump(count($trading_res['Data']));
-            var_dump(count($trading_hashs));
-            if(empty($trading_res['Data']) ||  count($trading_res['Data']) != count($trading_hashs)){
+                                        ->getRpcCall(TradingPoolProcess::class)
+                                        ->getTradingPoolList($trading_where, $trading_data, 1, count($trading_info_hashs));
+            if (empty($trading_res['Data']) || count($trading_res['Data']) != count($trading_info_hashs)) {
+                var_dump('区块验证失败!');
                 return returnError('区块验证失败!');
             }
+//            $block_head['tradingInfo'] = array_values($trading_res['Data']);
+            $block_head['tradingInfo'] = array_column($trading_res['Data'], 'trading');
+            $trading_info_all = $trading_res['Data'];
+        }else{
+            foreach ($block_head['tradingInfo'] as $bh_key => $bh_val){
+                $tx_id = bin2hex(hash('sha256',  hash('sha256', hex2bin($bh_val), true), true));
+                if(preg_match('/^[A-Za-z0-9]{4}[0]{64}[A-Za-z0-9]+/', $bh_val) != 1){
+                    $trading_info_hashs[] = $tx_id;
+                    $trading_info_all[] = [
+                        '_id'       =>  $tx_id,
+                        'trading'   =>  $bh_val
+                    ];
+                }
+                $merkle_leaves[] = $tx_id;
+
+            }
         }
-        $merker_tree = $this->MerkleTree->setNodeData($trading_hashs)
+        $merker_tree = $this->MerkleTree->setNodeData($merkle_leaves)
                                         ->bulidMerkleTreeSimple();
         //获取默克尔根
         $morker_tree_root = array_pop($merker_tree);
         //构建区块头部
+        var_dump(1);
         $check_head = $this->BlockHead->setMerkleRoot($morker_tree_root)
                                         ->setParentHash($block_head['parentHash'])//上一个区块的哈希
                                         ->setThisTime($block_head['thisTime'])
                                         ->setHeight($block_head['height'])//区块高度先暂存
-                                        ->setTxNum(count($trading_hashs))
+                                        ->setTxNum(count($merkle_leaves))
                                         ->setTradingInfo($block_head['tradingInfo'])
                                         ->setSignature($block_head['signature'])
                                         ->setVersion($block_head['version'])
                                         ->packBlockHead();
+        var_dump(2);
+//        var_dump($block_head);
+//        var_dump($trading_info_hashs);
+////        var_dump('end');
         if($check_head['headHash'] !== $block_head['headHash']){
             var_dump('区块验证不通过：'.$block_head['height']);
             return returnError('区块验证不通过!');
         }
+        var_dump(3);
         if ($is_broadcast != 1){
-            $trading_where = ['_id' => ['$in' => $trading_hashs]];
-            $trading_data = ['trading' => 0, 'time' => 0];
-            $trading_res = [];
+            var_dump(4);
+            //处理交易
+            //删除交易
+            var_dump($block_head);
+
+            !empty($trading_info_all) && ProcessManager::getInstance()
+                                                        ->getRpcCall(BlockProcess::class)
+                                                        ->checkTreading($trading_info_all, $trading_info_hashs);
+            var_dump(5);
+            ProcessManager::getInstance()
+                        ->getRpcCall(ConsensusProcess::class, true)
+                        ->bookedPurse($block_head['tradingInfo']);
+            var_dump(6);
+            $block_head['tradingInfo'] = $merkle_leaves;
+            //写入区块
+            ProcessManager::getInstance()
+                            ->getRpcCall(BlockProcess::class, true)
+                            ->insertBlockHead($block_head);
+            var_dump(7);
             ProcessManager::getInstance()
                         ->getRpcCall(PeerProcess::class, true)
                         ->broadcast(json_encode(['broadcastType' => 'Block', 'Data' => $block_head]));
-            //处理交易
-            if($trading_type == 1){
-                //事先没有获取交易
-                $trading_res = ProcessManager::getInstance()
-                                            ->getRpcCall(TradingPoolProcess::class)
-                                            ->getTradingPoolList($trading_where, $trading_data, 1, count($trading_hashs));
-            }
-            //判断交易是否为空
-            $encode_trading = [];
-            if(!empty($trading_res['Data'])){
-                foreach ($trading_res['Data'] as $tr_key => $tr_val){
-                    $encode_trading[] = $tr_val['trading'];
-                }
-                //删除交易
-                ProcessManager::getInstance()
-                            ->getRpcCall(BlockProcess::class)
-                            ->checkTreading($trading_res['Data'], $block_head['tradingInfo']);
-                ProcessManager::getInstance()
-                            ->getRpcCall(ConsensusProcess::class, true)
-                            ->bookedPurse($encode_trading);
-            }
-            //写入区块
-            ProcessManager::getInstance()
-                        ->getRpcCall(BlockProcess::class, true)
-                        ->insertBlockHead($block_head);
         }
-        return returnSuccess($check_head);
+        return returnSuccess($merkle_leaves);
     }
 
     /**
@@ -257,17 +278,36 @@ class BlockBaseModel extends Model
         $sync_block_top_height = ProcessManager::getInstance()
                                             ->getRpcCall(BlockProcess::class)
                                             ->getSyncBlockTopHeight();
-        var_dump($sync_block_top_height);
         //获取同步状态
         $block_state = ProcessManager::getInstance()
                                     ->getRpcCall(BlockProcess::class)
                                     ->getBlockState();
         if($block_state == 1 || $block_state == 2){
+            //区块同步未完成状态
             if($sync_block_top_height < $block['height']){
+                var_dump('更新区块目标');
+                var_dump($sync_block_top_height);
                 //把当前块的高度存入进程
                 ProcessManager::getInstance()
+                            ->getRpcCall(BlockProcess::class, true)
+                            ->setSyncBlockTopHeight($block['height']);
+                //把当前区块存入数据库
+                $txid_hashs = [];
+                foreach ($block['tradingInfo'] as $b_key => $b_val){
+                    $txid_hash = bin2hex(hash('sha256', hash('sha256', hex2bin($b_val), true), true));
+                    $txid_hashs[] = $txid_hash;
+                    $trading_infos[] = [
+                        '_id'       =>  $txid_hash,
+                        'trading'   =>  $b_val,
+                    ];
+                }
+                $block['tradingInfo'] = $txid_hashs;
+                ProcessManager::getInstance()
+                            ->getRpcCall(BlockProcess::class, true)
+                            ->insertBlockHead($block);
+                ProcessManager::getInstance()
                     ->getRpcCall(BlockProcess::class, true)
-                    ->setSyncBlockTopHeight($block['height']);
+                    ->checkTreading($trading_infos, $txid_hashs);
             }
             return returnError('区块同步中');
         }

@@ -76,11 +76,11 @@ class TestController extends Controller
         //$private = '303e020100301006072a8648ce3d020106052b8104000a042730250201010420eb2f8e66a246ed9b586f460cbca6df26e9fe8927616ec319e440addb6494bfc9';
         $private_key = hex2bin($private['address']); // 假设这是自己的私钥
         $public_key = bin2hex(secp256k1_pubkey_create($private_key, true)); // 假设这是自己的公钥
-        $public_key_hash160 = hash('ripemd160', hash('sha256', $public_key), true);
+        $public_key_hash160 = hash('ripemd160', hash('sha256', hex2bin($public_key), true));
         $res = [
-            'private_key' => $private,
+            'private_key' => $private['address'],
             'public_key' => $public_key,
-            'address' => bin2hex($public_key_hash160),
+            'address' => $public_key_hash160,
         ];
         var_dump($res);
         return $this->http_output->lists($res);
@@ -209,48 +209,39 @@ class TestController extends Controller
 
     public function http_checkScriptSig()
     {
-       //'6e0764700c8aaba491924dde9dabf22b6468a11750f5fc8c962afc759abee906'
-        $private = '0b6ebd47c7557890f37814a6c0fb1fa7de7ad9bc0be87a6f1d805e7bf254a0a5';
-        $private_key = hex2bin($private); // 假设这是自己的私钥
+        // ======签名过程======
+        $a = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+        $private_key = hex2bin('e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b999'); // 假设这是自己的私钥
         $public_key = bin2hex(secp256k1_pubkey_create($private_key, true)); // 假设这是自己的公钥
-//        $public_key = '020e345e5a753470fa47926dec81a8f6e72d12cbf6353652da6915a7bd4ca452ac';
+
         $public_key_hash160 = hash('ripemd160', hash('sha256', hex2bin($public_key), true)); // 再进行base58就是钱包地址
-
-
-
-        var_dump('私钥：');
-        var_dump($private);
-        var_dump('公钥：');
-        var_dump($public_key);
-        var_dump('地址：');
-        var_dump($public_key_hash160);
-
 
         $scriptPubKey_bytecode = script_compile("DUP HASH160 [$public_key_hash160] EQUALVERIFY CHECKSIG"); // 假设这是前一输出的脚本
         $temp_script = script_remove_codeseparator($scriptPubKey_bytecode); // 移除脚本中所有OP_CODESEPARATOR
         // 把上面的$temp_script放到本次交易对应的输入上，清空其他输入的脚本，并序列化整个交易单，图解参考：https://www.jianshu.com/p/3fa4bb1899ec
-
-        $aaa = '6666';
-        var_dump(bin2hex($scriptPubKey_bytecode));
-        $raw_tx = $aaa.bin2hex($temp_script); // 假设序列化结果是这样（列举具体示例太麻烦，这里结果无论是什么都不会影响验证结果）
+        $raw_tx = ''; // 假设序列化结果是这样（列举具体示例太麻烦，这里结果无论是什么都不会影响验证结果）
         $msg = hash('sha256', hash('sha256', hex2bin($raw_tx), true), true); // 进行2次sha256，得到32字节的消息
         $signature = bin2hex(secp256k1_sign($private_key, $msg)); // 得到签名
+        var_dump(bin2hex($private_key));
+        var_dump($public_key);
+        var_dump($public_key_hash160);
+        var_dump($signature);
+
 
         $scriptSig_bytecode = script_compile("[$signature] [$public_key]"); // 得到输入脚本，并写到对应的输入上
 
 
         // ======验证过程======
         $ctx = script_create_context();
-        script_set_checksig_callback($ctx, function($subscript) use($aaa){
-            var_dump($subscript);
-//            // 在这个回调里对交易单进行序列化，这里的$subscript相当于上面的$temp_script
-            $raw_tx = $aaa.bin2hex($subscript); // 序列化结果应该和签名过程一样，否则验证失败
-            $msg = hash('sha256', hash('sha256', hex2bin($raw_tx), true), true);
+        script_set_checksig_callback($ctx, function($subscript) {
+            // 在这个回调里对交易单进行序列化，这里的$subscript相当于上面的$temp_script
+            $raw_tx = ''; // 序列化结果应该和签名过程一样，否则验证失败
+            $msg = hex2bin('5df6e0e2761359d30a8275058e299fcc0381534545f55cf43e41983f5d4c9456');//hash('sha256', hash('sha256', hex2bin($raw_tx), true), true);
             return $msg; // OP_CHECKSIG需要这个消息才能工作，因为内部调用了secp256k1_verify($public_key, $msg, $signature)
         });
-        if (!script_eval($ctx, $scriptSig_bytecode)) echo('验证失败1');
-        if (!script_eval($ctx, $scriptPubKey_bytecode)) echo('验证失败2');
-        if (!script_verify($ctx)) echo('验证失败3'); // 所有的script_eval不能失败，并且script_verify为true才算验证通过
+        if (!script_eval($ctx, $scriptSig_bytecode)) die('验证失败1');
+        if (!script_eval($ctx, $scriptPubKey_bytecode)) die('验证失败2');
+        if (!script_verify($ctx)) die('验证失败3'); // 所有的script_eval不能失败，并且script_verify为true才算验证通过
         echo '验证通过' . PHP_EOL;
     }
 
@@ -425,7 +416,7 @@ class TestController extends Controller
         $purse_res = ProcessManager::getInstance()
             ->getRpcCall(PurseProcess::class)
             ->getPurseList($where, $data, 1, 1);
-        var_dump($purse_res['Data']);
+
     }
 
     public function http_testInc()
@@ -596,5 +587,51 @@ class TestController extends Controller
         ProcessManager::getInstance()
             ->getRpcCall(PeerProcess::class)
             ->broadcast(json_encode($data));
+    }
+
+    public function http_testSig()
+    {
+        // ======签名过程======
+        $private_key = hex2bin('e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b999'); // 假设这是自己的私钥
+        $public_key = bin2hex(secp256k1_pubkey_create($private_key, true)); // 假设这是自己的公钥
+
+        $public_key_hash160 = hash('ripemd160', hash('sha256', hex2bin($public_key), true)); // 再进行base58就是钱包地址
+
+        $scriptPubKey_bytecode = script_compile("DUP HASH160 [$public_key_hash160] EQUALVERIFY CHECKSIG"); // 假设这是前一输出的脚本
+        $temp_script = script_remove_codeseparator($scriptPubKey_bytecode); // 移除脚本中所有OP_CODESEPARATOR
+        // 把上面的$temp_script放到本次交易对应的输入上，清空其他输入的脚本，并序列化整个交易单，图解参考：https://www.jianshu.com/p/3fa4bb1899ec
+        $raw_tx = '6666'; // 假设序列化结果是这样（列举具体示例太麻烦，这里结果无论是什么都不会影响验证结果）
+        $msg = hash('sha256', hash('sha256', hex2bin($raw_tx), true), true); // 进行2次sha256，得到32字节的消息
+        $signature = bin2hex(secp256k1_sign($private_key, $msg)); // 得到签名
+
+        var_dump(bin2hex($private_key));
+        var_dump(bin2hex($public_key));
+        var_dump(bin2hex($public_key_hash160));
+
+
+        $scriptSig_bytecode = script_compile("[$signature] [$public_key]"); // 得到输入脚本，并写到对应的输入上
+
+        return $this->http_output->lists(['sig' => $signature, 'scriptSig' => bin2hex($scriptSig_bytecode),'scriptPubKey'=>bin2hex($scriptPubKey_bytecode)]);
+
+    }
+
+    public function http_testCheck()
+    {
+
+        $p = $this->http_input->getAllPostGet();
+        var_dump($p);
+        // ======验证过程======
+        $ctx = script_create_context();
+        script_set_checksig_callback($ctx, function($subscript) {
+            // 在这个回调里对交易单进行序列化，这里的$subscript相当于上面的$temp_script
+            $raw_tx = '6666'; // 序列化结果应该和签名过程一样，否则验证失败
+            //$msg = hex2bin('5df6e0e2761359d30a8275058e299fcc0381534545f55cf43e41983f5d4c9456');//hash('sha256', hash('sha256', hex2bin($raw_tx), true), true);
+            $msg = hash('sha256', hash('sha256', hex2bin($raw_tx), true), true);
+            return $msg; // OP_CHECKSIG需要这个消息才能工作，因为内部调用了secp256k1_verify($public_key, $msg, $signature)
+        });
+        if (!script_eval($ctx, hex2bin($p['scriptSig']))) return $this->http_output->notPut('','scriptSig验证失败');
+        if (!script_eval($ctx, hex2bin($p['scriptPubKey']))) return $this->http_output->notPut('','scriptPubKey验证失败');
+        if (!script_verify($ctx)) return $this->http_output->notPut('','sig验证失败'); // 所有的script_eval不能失败，并且script_verify为true才算验证通过
+        return $this->http_output->yesPut();
     }
 }
