@@ -234,7 +234,10 @@ class PurseModel extends Model
         CatCacheRpcProxy::getRpc()[$this->PurseCacheName . $address] = $new_purse;
 
         //删除待处理交易
-        $this->delPurseTrading($address, $del_trading);
+        foreach ($del_trading as $dt_key => $dt_val){
+            $this->delPurseTrading($address, $dt_val);
+        }
+
         return true;
 
     }
@@ -399,8 +402,7 @@ class PurseModel extends Model
 //            $txId[] = $t_val['txId'];
 //        }
         //把新交易从数据库中删除
-        $where = ['address' => $address, 'txId' => ['$in' => $trading]];
-        var_dump($where);
+        $where = ['address' => $address, 'txId' => $trading['txId'], 'n' => $trading['n']];
 //        $data = ['$pull' => ['txId' => ['$in' => $txId]]];
         $aaa = ProcessManager::getInstance()
                                 ->getRpcCall(PurseProcess::class)
@@ -454,7 +456,7 @@ class PurseModel extends Model
         if(!empty($txids)){
             $purse_where = [
                 '$and' => [['address' => $address]],
-                '$or'  => [['lockTime' => ['$gte' => 4294967295]], ['txId' => ['$in'   => $txids]]]
+                '$or'  => [['lockType' => ['$in' => [3,4]]], ['txId' => ['$in'   => $txids]]]
             ];
             $pagesize = count($trading) + 10;
         }
@@ -620,11 +622,13 @@ class PurseModel extends Model
         if(!empty($purse_res['Data'])){
             foreach ($purse_res['Data'] as $pr_key => $pr_val){
                 $purse[$pr_val['txId']] = [
-                    'txId'      =>  $pr_val['txId'],
-                    'n'         =>  $pr_val['n'],
-                    'value'     =>  $pr_val['value'],
-                    'reqSigs'   =>  $pr_val['reqSigs'],
-                    'lockTime'  =>  $pr_val['lockTime'],
+                    'txId'          =>  $pr_val['txId'],
+                    'n'             =>  $pr_val['n'],
+                    'value'         =>  $pr_val['value'],
+                    'reqSigs'       =>  $pr_val['reqSigs'],
+                    'lockBlock'     =>  $pr_val['lockBlock'],
+                    'lockTime'      =>  $pr_val['lockTime'],
+                    'lockType'      =>  $pr_val['lockType'],
                 ];
             }
         }

@@ -133,7 +133,7 @@ class VoteModel extends Model
                     'rounds'        =>  $vote_data['rounds'],
                     'voter'         =>  $vote_data['voter'],
                     'value'         =>  $vote_data['trading']['value'] ?? 0,
-                    'txId'          =>  isset($vote_data['trading']['txId']) ? [$vote_data['trading']['txId']] : [],
+                    'txId'          =>  isset($vote_data['trading']['txId']) ? $vote_data['trading']['txId'] : [],
                 ];
             }
             //插入数据
@@ -217,6 +217,7 @@ class VoteModel extends Model
         }elseif (!empty($vote_res['Data']) && empty($vote_data['trading'])){
             //投过票但是没有提交交易
             $flag = 1;
+            return returnError('该用户已经投过票');
         }elseif (!empty($vote_res['Data']) && !empty($vote_data['trading'])){
             //投过票又提交交易
             $flag = 1;
@@ -225,8 +226,12 @@ class VoteModel extends Model
 
             if (!empty($vote_res['Data']['txId'])){
                 //证交易是否已经被使用
+                var_dump($vote_data['trading']['txId']);
+                var_dump(21231);
+                var_dump($vote_res['Data']['txId']);
                 foreach ($vote_res['Data']['txId'] as $vr_val){
-                    if(!empty($vote_data['trading']['txId'][$vr_val])){
+                    var_dump($vr_val);
+                    if(in_array($vr_val, $vote_data['trading']['txId'])){
                         return returnError('该交易已经用于投票.');
                     }
                 }
@@ -300,9 +305,12 @@ class VoteModel extends Model
 //        if(!$validation['IsSuccess']){
 //            return $this->http_output->notPut($validation['Code'], $validation['Message']);
 //        }
+        if (!is_array($vote_data['noder']) || count($vote_data['noder']) > 30){
+            return returnError('投票节点有误!');
+        }
 
         $check_vote['rounds'] = $vote_data['rounds'];//所投轮次
-        $check_vote['voter'] = $vote_data['address'];//质押人员
+        $check_vote['voter'] = $vote_data['voter'];//质押人员
         $vote_type = $vote_data['voteAgain'] ?? 1;//投票类型
 
         //反序列化交易
@@ -314,7 +322,6 @@ class VoteModel extends Model
             if($decode_trading['lockType'] != 2){
                 return returnError('质押类型有误.');
             }
-            var_dump($decode_trading);
             $check_vote['trading']['value'] = $decode_trading['vout'][0]['value'] ?? 0;//质押金额(循环获取)
             $check_vote['trading']['lockTime'] = $decode_trading['lockTime'];//质押时间
             //根据投票类型，插入质押的txId

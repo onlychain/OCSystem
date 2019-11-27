@@ -100,7 +100,7 @@ class CreateTradingModel extends Model
                 array_unshift($vin, [
                     'txId'       =>  $p_val2['txId'],
                     'n'          =>  $p_val2['n'],
-                  'scriptSig'    =>  $p_val2['reqSigs'],//锁定脚本
+                    'scriptSig'  =>  $p_val2['reqSigs'],//锁定脚本
                 ]);
                 $total_value += $p_val2['value'];
                 if($total_value >= $value){
