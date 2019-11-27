@@ -61,7 +61,7 @@ class BlockController extends Controller
         if(empty($where)){
             return $this->http_output->notPut('', '请输入区块查询条件!');
         }
-        $query_res = $this->BlockModel->queryBlock($where);
+        $query_res = $this->BlockModel->queryBlock($where, 2);
         if(!$query_res['IsSuccess']) return $this->http_output->notPut('', '交易异常!');
         //返回查询结果
         return $this->http_output->lists($query_res['Data']);

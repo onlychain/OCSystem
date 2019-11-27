@@ -61,12 +61,12 @@ class AuditOrderController extends Controller
             case 2 :
                 //获取公钥
                 $publick = bin2hex(secp256k1_pubkey_create(hex2bin($privatek), true));
-                $address = hash('ripemd160', hash('sha256', hex2bin($publick), true));;
+                $address = hash('ripemd160', hash('sha256', hex2bin($publick), true));
                 break;
             default :
                 //获取公钥
                 $publick = bin2hex(secp256k1_pubkey_create(hex2bin($privatek), true));
-                $address = hash('ripemd160', hash('sha256', hex2bin($publick), true));;
+                $address = hash('ripemd160', hash('sha256', hex2bin($publick), true));
                 break;
         }
 

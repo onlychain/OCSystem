@@ -229,6 +229,7 @@ class NodeController extends Controller
      */
     public function tcp_superConsensus($param)
     {
+        var_dump('接收到区块验证请求');
         ProcessManager::getInstance()
                     ->getRpcCall(ConsensusProcess::class, true)
                     ->superCheckBlock($param);
@@ -263,6 +264,8 @@ class NodeController extends Controller
         $top_block_height = ProcessManager::getInstance()
                                 ->getRpcCall(BlockProcess::class)
                                 ->getTopBlockHeight();
+        //获取节点绑定名称
+        $node_name = get_instance()->config['name'];
 
 
         $res = [
@@ -271,6 +274,7 @@ class NodeController extends Controller
             'thisTime'          =>  $this_time,
             'blockHash'         =>  $top_block_hash,
             'blockHeight'       =>  $top_block_height,
+            'serverName'        =>  $node_name,
         ];
 
         return $this->http_output->lists($res);
