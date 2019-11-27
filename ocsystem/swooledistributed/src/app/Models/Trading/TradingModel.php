@@ -120,7 +120,7 @@ class TradingModel extends Model
         //验证交易
         if(empty($trading)) return returnError('请输入交易内容!');
         //把交易存入交易池数据库
-        $new_utxo['_id']    = bin2hex(hash('sha256', hex2bin($trading['trading']), true));
+        $new_utxo['_id']    = bin2hex(hash('sha256', hash('sha256', hex2bin($trading['trading']), true),true));
         $new_utxo['trading'] = $trading['trading'];
         $new_utxo['noce'] = $trading['noce'];
         $insert_res = ProcessManager::getInstance()
@@ -147,7 +147,7 @@ class TradingModel extends Model
         //把交易存入交易池数据库
         foreach ($tradings as $t_key => $t_val){
             $new_utxos[] = [
-                '_id'       =>  bin2hex(hash('sha256',  hex2bin($t_val), true)),
+                '_id'       =>  bin2hex(hash('sha256',  hash('sha256', hex2bin($t_val), true), true)),
                 'trading'   =>  $t_val,
                 'noce'      =>  'ffffffff',
                 'time'      =>  time()
@@ -234,9 +234,13 @@ class TradingModel extends Model
 //        if(!$validation['IsSuccess']){
 //            return $this->http_output->notPut($validation['Code'], $validation['Message']);
 //        }
-        //广播交易
-
-
+        //判断节点是否在同步
+        $sync = ProcessManager::getInstance()
+                        ->getRpcCall(BlockProcess::class)
+                        ->getBlockState();
+        if(in_array($sync, [1, 2])){
+            return returnError('区块数据同步中，无法接收交易。');
+        }
         //反序列化交易
         $decode_trading = $this->TradingEncodeModel->decodeTrading($trading_data['trading']);
         if($decode_trading == false){
@@ -301,7 +305,7 @@ class TradingModel extends Model
     protected function delSycnCoinbase(string $coinbase = '')
     {
         //查看交易是否存在，不存在则存入
-        $tx_id = bin2hex(hash('sha256', hex2bin($coinbase), true));
+        $tx_id = bin2hex(hash('sha256', hash('sha256', hex2bin($coinbase), true),true));
         $check_repeat = $this->queryTrading($tx_id);
         if(!empty($check_repeat['Data'])){
             return returnError('交易已存在');

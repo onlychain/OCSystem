@@ -165,9 +165,6 @@ class TradingEncodeModel extends Model
                 $encode_vout_str .= $public_key;
             }
         }
-        if(count($this->vin) > 500){
-            return false;
-        }
         //拼接交易输入,方便做验证
         foreach ($this->vin as $vin_key => $vin_val){
             $temp_vin = '';
@@ -246,13 +243,16 @@ class TradingEncodeModel extends Model
             $script_len = 0;//解锁脚本长度
             $script = '';//解锁脚本
             $txId = substr($trading, $str_index, 64);
+            if ($txId == false){
+                return returnError('当前交易数据有误.');
+            }
             if($txId == '0000000000000000000000000000000000000000000000000000000000000000'){
                 //为coinbase交易
                 //索引递进64个字符
                 $str_index += 64;
-                $decode_trading['vin'][$count_vin]['n'] = hexdec(substr($trading, $str_index, 4));
+                $decode_trading['vin'][$count_vin]['n'] = hexdec(substr($trading, $str_index, 2));
                 //索引递进4个字符
-                $str_index += 4;
+                $str_index += 2;
                 //获取coinbase内容长度
                 $script_len = hexdec(substr($trading, $str_index, 4)) * 2;
                 //索引递进4个字符
@@ -266,9 +266,21 @@ class TradingEncodeModel extends Model
                 $decode_trading['vin'][$count_vin]['txId'] = $txId;
                 //索引递进64个字符
                 $str_index += 64;
-                $decode_trading['vin'][$count_vin]['n'] = hexdec(substr($trading, $str_index, 4));
-                //索引递进4个字符
-                $str_index += 4;
+                //$decode_trading['vin'][$count_vin]['n'] = hexdec(substr($trading, $str_index, 4));
+                $flag = true;
+                $offset = 0;
+                $decode_trading['vin'][$count_vin]['n'] = 0;
+                while ($flag) {
+                    $val = hexdec(substr($trading, $str_index, 2));
+                    //索引递进2个字符
+                    $str_index += 2;//交易偏移量
+                    $decode_trading['vin'][$count_vin]['n'] |= ($val & 0x7F) << $offset;
+                    $offset += 7;
+                    if (($val & 0x80) == 0 ){
+                        $flag = false;
+                        break;
+                    }
+                }
                 //获取解锁脚本内容长度
                 $script_len = hexdec(substr($trading, $str_index, 4)) * 2;
                 //索引递进4个字符
@@ -280,8 +292,6 @@ class TradingEncodeModel extends Model
             }
         }
         //处理交易输出
-//        $vout_num = hexdec(substr($trading, $str_index, 4));
-//        $str_index += 4;
         $flag = true;
         $offset = 0;
         $vout_num = 0;
@@ -298,11 +308,13 @@ class TradingEncodeModel extends Model
                 break;
             }
         }
-
         //拼接交易输出
         for($count_vout = 0; $count_vout < $vout_num; ++$count_vout){
             //交易金额
             $decode_trading['vout'][$count_vout]['value'] = abs(hexdec(substr($trading, $str_index, 16)));
+            if($decode_trading['vout'][$count_vout]['value'] == 0){
+                return returnError('交易数据有误.');
+            }
             //索引递进16个字符
             $str_index += 16;
             //第几个交易输出
@@ -344,7 +356,7 @@ class TradingEncodeModel extends Model
         //索引递进2个字符
         $str_index += 2;
         $decode_trading['ins'] = substr($trading, $str_index, $ins_len);
-        $decode_trading['txId'] = bin2hex(hash('sha256', hex2bin($trading), true));
+        $decode_trading['txId'] = bin2hex(hash('sha256', hash('sha256', hex2bin($trading), true), true));
         return $decode_trading;
     }
 
@@ -621,6 +633,7 @@ class TradingEncodeModel extends Model
     {
         $pos = 0;
         $str = '';
+        $leb = [];
         while ($value != 0) {
             $leb[$pos++] = $value & 0x7F | 0x80;
             $value >>= 7;
@@ -628,9 +641,14 @@ class TradingEncodeModel extends Model
         if($pos > 0)
             $leb[$pos -1] &= 0x7F;
 
-        foreach ($leb as $leb_key => $leb_val){
-            $str .= str_pad(dechex($leb_val), 2, '0', STR_PAD_LEFT);
+        if(empty($leb)){
+            $str = '00';
+        }else{
+            foreach ($leb as $leb_key => $leb_val){
+                $str .= str_pad(dechex($leb_val), 2, '0', STR_PAD_LEFT);
+            }
         }
+
         return $str;
     }
 

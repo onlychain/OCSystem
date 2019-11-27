@@ -15,6 +15,7 @@ use app\Models\Block\MerkleTreeModel;
 use app\Models\Consensus\ConsensusModel;
 use app\Models\Node\VoteModel;
 use app\Models\Trading\TradingEncodeModel;
+use Server\Asyn\MQTT\Exception;
 use Server\Components\Process\Process;
 use Server\Components\CatCache\CatCacheRpcProxy;
 use MongoDB;
@@ -84,6 +85,12 @@ class BlockProcess extends Process
      * @var int
      */
     private $SyncBlockTopHeight = 1;
+
+    /**
+     * 同步区块的高度
+     * @var int
+     */
+    private $CurrentBlockTopHeight = 1;
 
     /**
      * 当前区块哈希
@@ -305,32 +312,37 @@ class BlockProcess extends Process
      * @param array $block
      * @return bool
      */
-    public function checkBlockData(array $block = [])
+    public function checkBlockData(array $block = [], array $trading_info_hash = [])
     {
         if(empty($block)){
             return returnError('区块不能为空.');
         }
-        $merker_tree = $this->MerkleTree->setNodeData($block['tradingInfo'])
+
+        $merker_tree = $this->MerkleTree->setNodeData($trading_info_hash)
                                         ->bulidMerkleTreeSimple();
+//        var_dump($merker_tree);
         //获取默克尔根
         $morker_tree_root = array_pop($merker_tree);
         //构建区块头部
         $check_head = $this->BlockHead->setMerkleRoot($morker_tree_root)
                                     ->setParentHash($block['parentHash'])//上一个区块的哈希
                                     ->setThisTime($block['thisTime'])
-                                    ->setHeight($block['height'])//区块高度先暂存，后期不上
+                                    ->setHeight($block['height'])//区块高度
                                     ->setTxNum(count($block['tradingInfo']))
                                     ->setTradingInfo($block['tradingInfo'])
                                     ->setSignature($block['signature'])
                                     ->setVersion($block['version'])
                                     ->packBlockHead();
+
+//        var_dump($check_head);
+//        var_dump($check_head['headHash']);
 //        var_dump('=====================');
 //        var_dump($block);
-//        var_dump($check_head);
-//        var_dump('确认区块');
-//        var_dump($check_head['headHash']);
 //        var_dump($block['headHash']);
         if($check_head['headHash'] !== $block['headHash']){
+//                    var_dump($check_head);
+//        var_dump('=====================');
+//        var_dump($block);
             return returnError('区块验证失败');
         }
         return returnSuccess();
@@ -354,23 +366,27 @@ class BlockProcess extends Process
         if(empty($trading_hashs)){
             return returnError('请传入交易哈希头!');
         }
+        var_dump(7474);
+        var_dump($tradings);
         //将交易数据存入交易集合
-//        $trading_res =  ProcessManager::getInstance()
-//                                    ->getRpcCall(TradingProcess::class)
-//                                    ->insertTradingMany($tradings);
-//        if(!$trading_res['IsSuccess']){
-//            return returnError($trading_res['Message']);
-//        }
-        if(empty($trading_hashs)){
-            foreach ($tradings as $t_key => $t_val){
-                $trading_hashs[] = bin2hex(hash('sha256', hex2bin($t_val), true));
-            }
+        $trading_res =  ProcessManager::getInstance()
+                                    ->getRpcCall(TradingProcess::class)
+                                    ->insertTradingMany($tradings);
+        var_dump(6565);
+        if(!$trading_res['IsSuccess']){
+            return returnError($trading_res['Message']);
         }
+//        if(empty($trading_hashs)){
+//            foreach ($tradings as $t_key => $t_val){
+//                $trading_hashs[] = bin2hex(hash('sha256', hash('sha256', hex2bin($t_val), true), true));
+//            }
+//        }
         //删除交易池内的交易数据
         $trading_pool_where = ['_id' => ['$in' => $trading_hashs]];
         $trading_pool_res = ProcessManager::getInstance()
                                 ->getRpcCall(TradingPoolProcess::class)
                                 ->deleteTradingPoolMany($trading_pool_where);
+        var_dump(7878);
         if(!$trading_pool_res['IsSuccess']){
             return returnError($trading_pool_res['Message']);
         }
@@ -458,7 +474,7 @@ class BlockProcess extends Process
      * 同步区块函数
      * @oneWay
      */
-    public function syncBlock(array $block_data = [])
+    public function syncBlock1(array $block_data = [])
     {
         $p2p_block = [];//存储同步过来的区块数据
         $flag = false;//判断是否要同步数据
@@ -466,7 +482,6 @@ class BlockProcess extends Process
         //从别的节点获取最高的区块高度,同步验证至这一高度
         var_dump($this->SyncBlockTopHeight);
         if($this->SyncBlockTopHeight == 1){
-
             return returnError('等待获取高度.');
         }
         //循环同步区块,如果同步的区块高度大于同步前获取的区块高度一个片段，则认为同步完成
@@ -536,6 +551,164 @@ class BlockProcess extends Process
                 $begin = 2;
             }
             $block_key = 'Block-' . $begin . '-' . $end;
+            var_dump($block_key);
+            ProcessManager::getInstance()
+                            ->getRpcCall(PeerProcess::class, true)
+                            ->p2pGetVal($block_key, []);
+            return returnSuccess('等待请求数据回调.');
+        }
+        //区块同步完毕
+        $this->setBlockState(3);
+    }
+
+    /**
+     * 同步所有数据
+     * @param array $block_data
+     * @return bool
+     */
+    public function syncBlock(array $block_data = [])
+    {
+        $flag = false;//判断是否要同步数据
+        $lock_flag = false;
+        $this->setBlockState(2);
+        //从别的节点获取最高的区块高度,同步验证至这一高度
+        if($this->SyncBlockTopHeight == 1){
+            return returnError('等待获取高度.');
+        }
+        //循环同步区块,如果同步的区块高度大于同步前获取的区块高度一个片段，则认为同步完成
+//        var_dump('目标高度');
+//        var_dump($this->SyncBlockTopHeight);
+//        var_dump('当前高度');
+//        var_dump($this->CurrentBlockTopHeight);
+//        while ($this->SyncBlockTopHeight - (($this->Limit - 1) * $this->Pagesize) > 0) {
+        while ($this->SyncBlockTopHeight  > $this->CurrentBlockTopHeight) {
+            var_dump('同步区块数据');
+            if (!empty($block_data)) {
+                var_dump('回调获得数据');
+                //有数据传入，证明是同步获取到的数据
+                $block_hashs = [];//存储区块哈希，用于删除
+                $blocks = [];//存储区块
+                $block_tradings = [];//存储区块交易数据
+                $tradings_hash = [];//存储区块交易哈希
+                //进行区块验证
+                foreach ($block_data as $ba_key => $ba_val) {
+                    $ba_val_temp = json_decode($ba_val, true);
+                    $trading_info_hashs = [];//存储交易哈希
+                    foreach ($ba_val_temp['tradingInfo'] as $bvt_key => $bvt_val){
+                        $tx_id = bin2hex( hash('sha256', hash('sha256', hex2bin($bvt_val), true), true));
+                        $trading_info_hashs[] = $tx_id;
+                        $block_tradings[] = [
+                            '_id'       =>  $tx_id,
+                            'trading'   =>  $bvt_val,
+                        ];
+                    }
+                    $check_block = [];
+                    $check_block = $this->checkBlockData($ba_val_temp, $trading_info_hashs);
+                    if (!$check_block['IsSuccess']) {
+                        var_dump('区块数据有误');
+                        return returnError('区块数据有误!');
+                    }
+                    $ba_val_temp['tradingInfo'] = $trading_info_hashs;
+                    $block_hashs[] = $ba_val_temp['headHash'];
+                    $blocks[] = $ba_val_temp;
+                    $tradings_hash = array_merge($tradings_hash, $trading_info_hashs);
+                }
+                //删除交易数据
+                ProcessManager::getInstance()->getRpcCall(TradingProcess::class)->deleteTradingPoolMany(['_id' => ['$in' => $tradings_hash]]);
+                //插入交易数据
+                ProcessManager::getInstance()->getRpcCall(TradingProcess::class)->insertTradingMany($block_tradings);
+                $delete_where = ['headHash' => ['$in' => $block_hashs]];
+                //删除区块数据
+                $this->deleteBloclHeadMany($delete_where);
+                //插入区块数据
+                $this->insertBlockHeadMany($blocks);
+
+                $this->resetPurse(array_column($block_tradings,'trading'), $tradings_hash);
+
+//                $this->CurrentBlockTopHeight += count($block_data);
+                if(count($block_data) == $this->Pagesize){
+                    ++$this->Limit;
+                    $this->CurrentBlockTopHeight = ($this->Limit - 1) * $this->Pagesize;
+                }elseif (count($block_data) < $this->Pagesize){
+                    $this->CurrentBlockTopHeight = (($this->Limit - 1) * $this->Pagesize) + count($block_data);
+                    var_dump($block_data);
+                    $lock_flag = true;
+                    var_dump('结束'.count($block_data));
+//                    break;
+                }
+                $block_data = [];
+            }
+            $where = [
+                'height' =>
+                    [
+                        '$gte' => (($this->Limit - 1) * $this->Pagesize) + 1 ,
+                        '$lte' => $this->Pagesize * $this->Limit
+                    ]
+            ];
+            $data = ['_id' => 0];
+            $block_res = $this->getBloclHeadList($where, $data, 1, $this->Pagesize, ['height' => 1]);
+            var_dump($where);
+            var_dump(count($block_res['Data']));
+            if ($lock_flag || count($block_res['Data']) == $this->Pagesize) {
+                var_dump('本地有数据');
+                //有数据，对数据进行检测
+                $block_tradings = [];//存储区块交易数据
+                $tradings_hash = [];//存储区块交易哈希
+                foreach ($block_res['Data'] as $br_key => $br_val) {
+                    //验证区块数据
+                    $trading_info_hashs = [];//存储交易哈希
+                    $trading_info = [];//存储整交易
+                    $trading_info_hashs = $br_val['tradingInfo'];
+                    $trading_info = ProcessManager::getInstance()
+                        ->getRpcCall(TradingProcess::class)
+                        ->getTradingList(['_id' => ['$in' => $trading_info_hashs]],
+                            [],
+                            1,
+                            count($trading_info_hashs));
+
+                    $full_trading = [];
+                    foreach ($trading_info['Data'] as $ti_key => $tu_val){
+                        //获取交易所在的key
+                        $tkey = array_search($tu_val['_id'], $trading_info_hashs);
+                        $full_trading[intval($tkey)] = $tu_val['trading'];
+                    }
+                    ksort($full_trading);
+                    $br_val['tradingInfo'] = $full_trading;//array_column($trading_info['Data'], 'trading');
+                    $check_block = $this->checkBlockData($br_val, $trading_info_hashs);
+                    //验证通过，赋值新的区块,否则执行请求函数
+                    if(!$check_block['IsSuccess']){
+                        var_dump('同步区块出错');
+                        //用于请求数据
+                        $flag = true;
+                        break 2;
+                    }
+                    $tradings_hash = array_merge($tradings_hash, $trading_info_hashs);
+                    $block_tradings = array_merge($block_tradings, $br_val['tradingInfo']);
+                }
+                $this->resetPurse($block_tradings, $tradings_hash);
+                var_dump('limit++');
+                $this->CurrentBlockTopHeight += $this->Pagesize;
+                ++$this->Limit;
+            }else{
+                var_dump('over3');
+                $flag = true;
+                break;
+            }
+
+        }
+        var_dump('是否执行回调');
+        var_dump($flag);
+        if($flag){
+            var_dump('执行回调');
+            //请求区块数据
+            $block_key = '';
+            $begin = (($this->Limit - 1) * $this->Pagesize) + 1;
+            $end = $this->Pagesize * $this->Limit;
+            if($begin == 1){
+                $begin = 2;
+            }
+            $block_key = 'Block-' . $begin . '-' . $end;
+            var_dump($block_key);
             ProcessManager::getInstance()
                             ->getRpcCall(PeerProcess::class, true)
                             ->p2pGetVal($block_key, []);
@@ -546,6 +719,54 @@ class BlockProcess extends Process
     }
 
 
+    /**
+     * 重置钱包
+     * @param array $tradings
+     * @param array $trading_txid
+     */
+    public function resetPurse($tradings = [], $trading_txid = [])
+    {
+        //重新刷新钱包
+        foreach ($tradings as $tr_key => $tr_val){
+            $decode_trading = $this->TradingEncodeModel->decodeTrading($tr_val);
+            $tx_id = $decode_trading['txId'];
+            $lock_time = $decode_trading['lockTime'];
+            $lockBlock = $decode_trading['lockBlock'];
+            $lockType = $decode_trading['lockType'];
+            ProcessManager::getInstance()
+                            ->getRpcCall(PurseProcess::class, true)
+                            ->deletePurseMany(['txId'   =>  $tx_id]);
+            array_map(function ($vin, $vout) use (&$purses, $tx_id, $lock_time, $lockBlock, $lockType){
+
+                //处理交易输入,用于删除钱包数据
+                if($vin != null && isset($vin['txId'])){
+                    //删除这笔钱包数据,想办法优化，目前没找到类似case when的方法
+                    $delete_purse = ['txId' => $vin['txId'], 'n' => $vin['n']];
+//                    $this->deletePurse($delete_purse);
+                    ProcessManager::getInstance()
+                                    ->getRpcCall(PurseProcess::class, true)
+                                    ->deletePurse($delete_purse);
+                }
+                if($vout != null){
+                    //新生成的钱包
+                    $purses[] = [
+                        'address'       => $vout['address'],
+                        'txId'          => $tx_id,
+                        'n'             => $vout['n'],
+                        'value'         => $vout['value'],
+                        'reqSigs'       => $vout['reqSigs'],
+                        'lockTime'      => $lock_time,
+                        'lockBlock'     => $lockBlock,
+                        'lockType'      => $lockType,
+                    ];
+                }
+            },$decode_trading['vin'], $decode_trading['vout']);
+        }
+        //把钱包数据插入数据库
+        ProcessManager::getInstance()
+                        ->getRpcCall(PurseProcess::class)
+                        ->insertPurseMany($purses);
+    }
 
     /**
      * 获取区块同步状态false代表未同步完成true代表同步完成
@@ -554,6 +775,15 @@ class BlockProcess extends Process
     public function getBlockState() : int
     {
         return $this->BlockState;
+    }
+
+    /**
+     * 获取区块同步状态false代表未同步完成true代表同步完成
+     * @return bool
+     */
+    public function getCurrentBlock() : int
+    {
+        return $this->CurrentBlockTopHeight;
     }
 
     /**
@@ -605,6 +835,7 @@ class BlockProcess extends Process
                                                         ->setTime($ct_val['time'])
                                                         ->setLockTime(1 + 15768000)
                                                         ->setLockType($ct_val['lockType'])
+                                                        ->setLockBlock(1)
                                                         ->setIns('')
                                                         ->encodeTrading();
                 $nodes[] = [
@@ -613,7 +844,7 @@ class BlockProcess extends Process
                         'noce'      =>  'ffffff',
                         'renoce'    =>  '',
                     ],
-                    'address'       => $ct_val['to'][0]['address'],
+                    'noder'       => $ct_val['to'][0]['address'],
                     'ip'            => $ct_val['ip'],
                     'port'          => $ct_val['port']
                 ];
@@ -623,10 +854,11 @@ class BlockProcess extends Process
                                                         ->setTime($ct_val['time'])
                                                         ->setLockTime(0)
                                                         ->setLockType($ct_val['lockType'])
+                                                        ->setLockBlock(1)
                                                         ->setIns('')
                                                         ->encodeTrading();
             }
-            $tx_id = bin2hex( hash('sha256', hex2bin($trading_info), true));
+            $tx_id = bin2hex( hash('sha256', hash('sha256', hex2bin($trading_info), true), true));
             $tx_ids[] = $tx_id;
             $trading[] = [
                 '_id'   =>  $tx_id,
@@ -651,8 +883,10 @@ class BlockProcess extends Process
                                     ->setSignature('arnoldsaxon')//工作者签名
                                     ->setHeight($top_block_height + 1)
                                     ->setTxNum(count($tx_ids))
-                                    ->setTradingInfo($tx_ids)
+                                    ->setTradingInfo($tradings)
+                                    ->setVersion(1)
                                     ->packBlockHead();
+
         //查询区块是否存在
         $check_block = $this->getBlockHeadInfo(['height' => 1]);
         if(!empty($check_block['Data'])) {
@@ -688,6 +922,7 @@ class BlockProcess extends Process
                     ->setPurseState(1);
 
         //插入区块数据
+        $black_head['tradingInfo'] = $tx_ids;
         $this->insertBlockHead($black_head);
         //设置区块高度
         $this->setTopBlockHeight(1);
