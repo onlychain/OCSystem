@@ -79,5 +79,42 @@ class OnlyvoteController extends Controller
         return $this->http_output->lists($res['Data']);
     }
 
+    /**
+     * 开通权益并且要有500个only进行交易
+     */
+    public function http_equity()
+    {
+        $address = $this->http_input->getAllPostGet();
+        $res = $this->VoteClass->equity($address);
+        if (!$res['IsSuccess']) {
+            return $this->http_output->notPut('', $res['Message']);
+        }
+        return $this->http_output->lists($res);
+    }
 
+    /**
+     * 转账交易
+     */
+    public function http_wireTransfer()
+    {
+        $address = $this->http_input->getAllPostGet();
+        $res = $this->VoteClass->transferAccountsinfo($address);
+        if(!$res['IsSuccess']){
+            return $this->http_output->notPut('', $res['Message']);
+        }
+        return $this->http_output->lists($res);
+    }
+    
+    /**
+     * 转账交易(需要传私钥和公玥)
+     */
+    public function http_wireTransfers()
+    {
+        $address = $this->http_input->getAllPostGet();
+        $res = $this->VoteClass->wireTransfer($address);
+        if(!$res['IsSuccess']){
+            return $this->http_output->notPut('', $res['Message']);
+        }
+        return $this->http_output->lists($res);
+    }
 }
