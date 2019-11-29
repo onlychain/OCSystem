@@ -305,8 +305,11 @@ class ConsensusProcess extends Process
         if (!$clock_state){
             return returnError('节点未启动');
         }
+        if($this->Identity != 'core'){
+            return returnError('节点未启动');
+        }
         if(empty($check_block)){
-            return returnError('请传入要验证的数据.');
+            return returnError('非核心节点不验证区块.');
         }
         //判断消息是否已经过期
         if(($check_block['time'] + 60) < time()){
@@ -437,12 +440,20 @@ class ConsensusProcess extends Process
         $block_head_res = ProcessManager::getInstance()
                                         ->getRpcCall(BlockProcess::class)
                                         ->insertBlockHead($insert_block_data);
-        //删除交易
-        $del_trading = ProcessManager::getInstance()
-                                    ->getRpcCall(BlockProcess::class)
-                                    ->checkTreading($tradings, $insert_block_data['tradingInfo']);
+        //删除交易,把交易内容写入交易库中
+        $trading_res =  ProcessManager::getInstance()
+                        ->getRpcCall(TradingProcess::class, true)
+                        ->insertTradingMany($tradings);
 
-        if($del_trading['IsSuccess']){
+        $trading_pool_res = ProcessManager::getInstance()
+                                        ->getRpcCall(TradingPoolProcess::class)
+                                        ->deleteTradingPoolMany(['_id' => ['$in' => $insert_block_data['tradingInfo']]]);
+
+//        $del_trading = ProcessManager::getInstance()
+//                                    ->getRpcCall(BlockProcess::class)
+//                                    ->checkTreading($tradings, $insert_block_data['tradingInfo']);
+
+        if($trading_pool_res['IsSuccess']){
             //操作成功,设置当前最新区块的高度跟哈希
 //            ProcessManager::getInstance()
 //                        ->getRpcCall(BlockProcess::class)

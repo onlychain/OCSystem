@@ -349,7 +349,7 @@ class PeerProcess extends Process
         //反序列化数据
         $res = [];//验证返回结果
         $decode_content = json_decode($content, true);
-//        var_dump('收到广播数据广播类型：'.$decode_content['broadcastType']);
+        var_dump('收到广播数据广播类型：'.$decode_content['broadcastType']);
 //        return;
         //根据具体的广播数据进行处理，不合法就不再进行广播
         switch ($decode_content['broadcastType']){
@@ -369,6 +369,15 @@ class PeerProcess extends Process
                 $this->NodeModel->initialization($context);
                 $res = $this->NodeModel->checkNodeRequest($decode_content['Data'], 1, 2);
                 break;
+            case 'Node' :
+                $this->NodeModel->initialization($context);
+                $res = $this->NodeModel->syncNode($decode_content['Data']);
+                break;
+            case 'SuperNode' :
+                $this->NodeModel->initialization($context);
+                $res = $this->NodeModel->syncSuperNode($decode_content['Data']);
+                break;
+
             default :
                 return false;
                 break;

@@ -155,11 +155,14 @@ class IncentivesProcess extends Process
      */
     public function insertIncentivesMany($incentives = [], $get_ids = false)
     {
-        if(empty($incentives)) return returnError('交易内容不能为空.');
+        if(empty($incentives)) return returnError('激励内容不能为空.');
         $insert_res = $this->Incentives->insertMany($incentives);
+        //更新缓存
         if(!$insert_res->isAcknowledged()){
             return returnError('插入失败!');
         }
+        //写入缓存
+        CatCacheRpcProxy::getRpc()['Incentives'] = $incentives;
         $ids = [];
         if($get_ids){
             foreach ($insert_res->getInsertedIds() as $ir_val){
