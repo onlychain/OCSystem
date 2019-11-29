@@ -257,5 +257,77 @@ class VoteModel extends Model
     }
 
 
+    /**
+     * 将Mongodb对象数据转换为数组
+     * @param array->object    $list   Mongodb对象数据
+     * @return array           $list   转换为数组后的数据
+     */
+    protected function mongoObjectToArray($list)
+    {
+        if ($list) {
+            array_walk($list, function (&$item, $key) {
+                if (is_object($item)) $item = get_object_vars($item);
+                array_walk($item, function (&$value, &$kkey) {
+                    if (is_object($value)) {
+                        $value = get_object_vars($value);
+                        $value = array_shift($value);
+                        if (is_float($value)) {
+                            $value = round($value, 5);
+                        }
+                    }
+                });
+            });
+        }
+        return $list;
+    }
+
+
+    /**
+     * 添加用户地址
+     * @param $address
+     * @return bool
+     */
+    public function insertAddress($address)
+    {
+        //地址不能重复
+        $result = $this->VoteData->info('*')
+            ->from('t_user_address')
+            ->where("", " `address` = '" . $address . "'", 'RAW')
+            ->query();
+        $result = $result['result'];
+        if (empty($result)) {
+            $data = [
+                $address,
+                time()
+            ];
+            $res = $this->VoteData->insertInto('t_user_address')
+                ->intoColumns(['address', 'created'])
+                ->intoValues($data)
+                ->query();
+            if ($res) {
+                return returnSuccess('', '添加地址成功');
+            } else {
+                return returnError('添加地址失败');
+            }
+        } else {
+            return returnError('地址已存在');
+        }
+    }
+
+    /**
+     * 下发的交易要转换成2次哈希
+     */
+    public function txIdHash($trading = '')
+    {
+        $trading = bin2hex(hash('sha256', hash('sha256', hex2bin($trading), true), true));
+        // hash('ripemd160', hash('sha256', hex2bin($trading), true));//给的公钥生成地址
+        return $trading;
+    }
+
+    /**
+     *                                        以上都是请求接口
+     * =====================================================================================================================
+     */
+
 
 }
