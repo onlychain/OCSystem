@@ -329,5 +329,247 @@ class VoteModel extends Model
      * =====================================================================================================================
      */
 
+    /**
+     * 转账交易(要保留)
+     * @param array $address
+     * @param int $page
+     * @param int $pagesize
+     *
+     * @return bool
+     */
+    public function wireTransfer($address = [])
+    {
+        $end_result = [];
+        $moneyData = [];//拼接钱包
+        if (empty($address['privateKey'])) return returnError('请给我私钥');
+        if (empty($address['publicKey'])) return returnError('请给我公钥');
+        if (empty($address['from'])) return returnError('请输入发送者地址');
+        if (empty(intval($address['value']))) return returnError('请输入only金额');
+        //查看钱包的数据
+        $where = ['address' => $address['address']];
+        $txId = $this->mongdb_operation->find($where)->toArray();
+        $txId = $this->mongoObjectToArray($txId);
+        $onlyMony = array_sum(array_column($txId, 'value')) / 100000000;
+        if ($onlyMony < intval($address['value'])) {
+            return returnError('你的钱包金额不够');
+        }
+        foreach ($txId as $key => $value) {
+            $moneyData[$key]['txId'] = $value['txId'];
+            $moneyData[$key]['n'] = $value['n'];
+            $moneyData[$key]['scriptSig'] = $value['reqSigs'];
+        }
+        $toData = [
+            [
+                'address' => $address['address'],
+                'value'   => intval($address['value']),
+                'type'    => 1,
+            ]
+        ];
+        $end_result['privateKey'] = $address['privateKey'];
+        $end_result['publicKey'] = $address['publicKey'];
+        $end_result['tx'] = $moneyData;
+        $end_result['from'] = $address['from'];
+        $end_result['to'] = $toData;
+        $end_result['ins'] = '';
+        $end_result['time'] = 0;
+        $end_result['lockTime'] = 0;
+        $end_result['lockType'] = 1;
+        $res = $this->encodeTrading($end_result);
+        $res = json_decode($res['body'], true);
+        if ($res['code'] == 200) {
+            //取出序列化
+            $trading['trading'] = $res['record'];
+            $trading['txId'] = bin2hex(hash('sha256', hash('sha256', hex2bin($res['record']), true), true));
+        } else {
+            return returnError('获取序列化请求超时');
+        }
+        $trading['noce'] = str_shuffle($end_result['from'] . time());
+        $trading['address'] = $address['address'];
+        $trading['renoce'] = '';
+        $result = $this->receivingTransactions($trading);
+        $result = json_decode($result['body'], true);
+        if ($result['code'] == 200) {
+            if ($result['record']['IsSuccess'] == false) {
+                return returnSuccess('', $result['Message']);
+            } else {
+                //转账交易存取数据库
+                $wireData = [
+                    $address['address'],
+                    $end_result['from'],
+                    intval($address['value']),
+                    $trading['trading'],
+                    1,
+                    time(),
+                    $trading['txId'],
+                    $address['remark']
+                ];
+                $this->insertWireTrading($wireData);
+                return returnSuccess('', '打包中');
+            }
+        } else {
+            //转账交易存取数据库
+            $wireData = [
+                $address['address'],
+                $end_result['from'],
+                intval($address['value']),
+                $trading['trading'],
+                2,
+                time(),
+                $trading['txId'],
+                $address['remark']
+            ];
+            $this->insertWireTrading($wireData);
+            return returnError($result['msg']);
+        }
+    }
+
+    /**
+     * 转账交易添加数据库
+     * @param array $data
+     */
+    public function insertWireTrading($data = [])
+    {
+        if (empty($data)) return returnError('数组不能为空');
+        $res = $this->VoteData->insertInto('t_wire_transfer')
+            ->intoColumns(['address', 'from', 'value', 'trading', 'status', 'created','txId'])
+            ->intoValues($data)
+            ->query();
+        if (!$res) return returnError('添加失败');
+
+    }
+
+    /**
+     * 开通权益的状态(需要传私钥和密钥)
+     * @param array $data
+     * @return bool
+     */
+    public function equity($data = [])
+    {
+        $end_result = [];//最终结果
+        if (empty($data['address'])) return returnError('地址不能为空');
+        if (empty($data['privateKey'])) return returnError('私钥不能为空');
+        if (empty($data['publicKey'])) return returnError('公钥不能为空');
+        //首次开通权益的时候，要把地址存库
+        $this->insertAddress($data['address']);
+        //获取钱包地址列表
+        $data['value'] = 500;
+        //判断该用户是否存在
+        $result = $this->VoteData->info('*')
+            ->from('t_user_address')
+            ->where("", "`address` = '" . $data['address'] . "'", 'RAW')
+            ->query();
+        $result = $result['result'];
+        if ($result) {
+            //去进行生产交易，这笔交易类型为1
+            $end_result['from'] = $data['address'];
+            $end_result['to'] = [$data['address'] => intval($data['value']) * 10000000];
+            $end_result['lockType'] = 1;
+            $query_result = $this->createTrading($end_result);
+            $query_result = json_decode($query_result['body'], true);
+            if ($query_result['code'] == 200) {
+                //生成交易之后查询有多少交易可以
+                $addressData = [
+                    'address' => $data['address'],
+                    'value' => $data['value'],
+                    'type' => 1,
+                    'privateKey' => $data['privateKey'],
+                    'publicKey' => $data['privateKey'],
+                ];
+                $transacBack=$this->transacTion($query_result['record'],$addressData);
+                if($transacBack['IsSuccess']  == false){
+                    return  returnError($transacBack['Message']);
+                }else {
+                    $res = $this->VoteData->update('t_user_address')
+                        ->set('status', 1)
+                        ->set('equity_time', time())
+                        ->where('', " `address` = '" . $data['address'] . "'", 'RAW')
+                        ->query();
+                    $resultList['pledgeTime'] = date('Y-m-d H:i:s', time());
+                    $resultList['unlockTime'] = date('Y-m-d H:i:s', time() + 365 * 24 * 60 * 60);
+                    if ($res) return returnSuccess($resultList, '权益开通');
+                }
+            } else {
+                return returnError($query_result['msg']);
+            }
+
+        } else {
+            return returnError('该地址不存在');
+        }
+    }
+
+
+    /**
+     * 开通权益的状态
+     * @param array $data
+     * @return bool
+     */
+    public function equitys($data = [])
+    {
+        $end_result = [];//最终结果
+        if (empty($data['address'])) return returnError('地址不能为空');
+        if (empty($data['trading'])) return returnError('序列号不能为空');
+        //首次开通权益的时候，要把地址存库
+        $this->insertAddress($data['address']);
+        //获取钱包地址列表
+        $data['value'] = 500;
+        //判断该用户是否存在
+        $result = $this->VoteData->info('*')
+            ->from('t_user_address')
+            ->where("", "`address` = '" . $data['address'] . "'", 'RAW')
+            ->query();
+        $result = $result['result'];
+        if ($result) {
+            //提交交易
+            $tranding['trading'] = $data['trading'];
+            $tranding['noce'] = $data['noce'];
+            $tranding['renoce'] = $data['renoce'] ?? '';
+            $tranding['address'] = $data['address'];
+            $results = $this->receivingTransactions($tranding);
+            $results = json_decode($results['body'], true);
+            if ($results['code'] == 200) {
+                if ($results['record']['IsSuccess'] == false) {
+                    return returnSuccess('', $results['Message']);
+                } else {
+                    //开通权益
+                    $res = $this->VoteData->update('t_user_address')
+                        ->set('status', 1)
+                        ->set('equity_time', time())
+                        ->where('', " `address` = '" . $data['address'] . "'", 'RAW')
+                        ->query();
+                    $resultList['pledgeTime'] = date('Y-m-d H:i:s', time());
+                    $resultList['unlockTime'] = date('Y-m-d H:i:s', time() + 365 * 24 * 60 * 60);
+                    //转账交易存取数据库
+                    $wireData = [
+                        $data['address'],
+                        $data['address'],
+                        intval($data['value']),
+                        $data['trading'],
+                        1,
+                        time(),
+                        $this->txIdHash($data['trading'])
+                    ];
+                    $this->insertWireTrading($wireData);
+                    if ($res) return returnSuccess($resultList, '权益开通');
+                }
+            } else {
+                //转账交易存取数据库
+                $wireData = [
+                    $data['address'],
+                    $data['address'],
+                    intval($data['value']),
+                    $data['trading'],
+                    2,
+                    time(),
+                    $this->txIdHash($data['trading'])
+                ];
+                $this->insertWireTrading($wireData);
+                return returnError($results['msg']);
+            }
+        } else {
+            return returnError('该地址不存在');
+        }
+
+    }
+
 
 }
