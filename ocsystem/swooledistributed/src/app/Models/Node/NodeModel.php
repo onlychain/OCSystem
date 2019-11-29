@@ -249,7 +249,9 @@ class NodeModel extends Model
      */
     public function syncSuperNode(array $super_node = [])
     {
+        var_dump(1);
         if(empty($super_node)){
+            var_dump('节点为空');
             return returnError('节点为空');
         }
         //获取当前节点身份
@@ -257,6 +259,7 @@ class NodeModel extends Model
                                         ->getRpcCall(ConsensusProcess::class)
                                         ->getNodeIdentity();
         if($this_node_identity == 'core'){
+            var_dump('超级节点不进行同步');
             return returnError('超级节点不进行同步.');
         }
         //先删除超级节点数据
@@ -281,11 +284,14 @@ class NodeModel extends Model
      */
     public function syncNode(array $node = [])
     {
+        var_dump(2);
         if($this->NodeState){
+            var_dump('备选节点已同步');
             return returnError('备选节点已同步');
         }
         if(empty($node)){
-            return returnError('节点为空');
+            var_dump('节点数据为空');
+            return returnError('节点数据为空');
         }
         //获取当前节点身份
         $this_node_identity = ProcessManager::getInstance()

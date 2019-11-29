@@ -236,8 +236,8 @@ class TradingModel extends Model
 //        }
         //判断节点是否在同步
         $sync = ProcessManager::getInstance()
-                        ->getRpcCall(BlockProcess::class)
-                        ->getBlockState();
+                                ->getRpcCall(BlockProcess::class)
+                                ->getBlockState();
         if(in_array($sync, [1, 2])){
             return returnError('区块数据同步中，无法接收交易。');
         }
@@ -248,6 +248,12 @@ class TradingModel extends Model
         }
         //判断是否是coinbase交易
         if(!empty($decode_trading['vin'][0]['coinbase'])){
+            $identity = ProcessManager::getInstance()
+                                        ->getRpcCall(ConsensusProcess::class)
+                                        ->getNodeIdentity();
+            if($identity == 'core' && $is_broadcast == 2){
+                return returnError('超级节点不接收coinbase交易广播.');
+            }
             if($type == 2){
                 //同步到coinbase交易处理
                 $this->delSycnCoinbase($trading_data['trading']);

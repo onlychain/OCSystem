@@ -315,6 +315,8 @@ class BlockProcess extends Process
     public function checkBlockData(array $block = [], array $trading_info_hash = [])
     {
         if(empty($block)){
+            var_dump('区块不能为空.');
+            var_dump($block);
             return returnError('区块不能为空.');
         }
 
@@ -340,7 +342,7 @@ class BlockProcess extends Process
 //        var_dump($block);
 //        var_dump($block['headHash']);
         if($check_head['headHash'] !== $block['headHash']){
-//                    var_dump($check_head);
+//        var_dump($check_head);
 //        var_dump('=====================');
 //        var_dump($block);
             return returnError('区块验证失败');
@@ -366,13 +368,13 @@ class BlockProcess extends Process
         if(empty($trading_hashs)){
             return returnError('请传入交易哈希头!');
         }
-        var_dump(7474);
-        var_dump($tradings);
+//        var_dump(7474);
+//        var_dump($tradings);
         //将交易数据存入交易集合
         $trading_res =  ProcessManager::getInstance()
                                     ->getRpcCall(TradingProcess::class)
                                     ->insertTradingMany($tradings);
-        var_dump(6565);
+//        var_dump(6565);
         if(!$trading_res['IsSuccess']){
             return returnError($trading_res['Message']);
         }
@@ -386,7 +388,7 @@ class BlockProcess extends Process
         $trading_pool_res = ProcessManager::getInstance()
                                 ->getRpcCall(TradingPoolProcess::class)
                                 ->deleteTradingPoolMany($trading_pool_where);
-        var_dump(7878);
+//        var_dump(7878);
         if(!$trading_pool_res['IsSuccess']){
             return returnError($trading_pool_res['Message']);
         }
@@ -604,6 +606,7 @@ class BlockProcess extends Process
                     }
                     $check_block = [];
                     $check_block = $this->checkBlockData($ba_val_temp, $trading_info_hashs);
+//                    var_dump($trading_info_hashs);
                     if (!$check_block['IsSuccess']) {
                         var_dump('区块数据有误');
                         return returnError('区块数据有误!');
@@ -630,9 +633,15 @@ class BlockProcess extends Process
                     ++$this->Limit;
                     $this->CurrentBlockTopHeight = ($this->Limit - 1) * $this->Pagesize;
                 }elseif (count($block_data) < $this->Pagesize){
-                    $this->CurrentBlockTopHeight = (($this->Limit - 1) * $this->Pagesize) + count($block_data);
-                    var_dump($block_data);
-                    $lock_flag = true;
+                    if($this->Limit == 1 && (count($block_data) == $this->Pagesize - 1)){
+
+                        $this->CurrentBlockTopHeight += $this->Pagesize;
+                    }else {
+                        $lock_flag = true;
+                        $this->CurrentBlockTopHeight = (($this->Limit - 1) * $this->Pagesize) + count($block_data);
+                    }
+
+
                     var_dump('结束'.count($block_data));
 //                    break;
                 }
