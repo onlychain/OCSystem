@@ -104,7 +104,7 @@ class OnlyvoteController extends Controller
         }
         return $this->http_output->lists($res);
     }
-    
+
     /**
      * 转账交易(需要传私钥和公玥)
      */
@@ -117,4 +117,107 @@ class OnlyvoteController extends Controller
         }
         return $this->http_output->lists($res);
     }
+
+    /**
+     * 获取系统时间、轮次、轮次时间、区块高度，已投数量
+     */
+    public function http_getCountOnly()
+    {
+        $address = $this->http_input->getPost('address');
+        $res = $this->VoteClass->getCountOnly($address);
+        if(!$res['IsSuccess']){
+            return $this->http_output->notPut('', $res['Message']);
+        }
+        return $this->http_output->lists($res['Data']);
+    }
+
+
+    /**
+     * 获取投票列表
+     */
+    public function http_getVoteList(){
+        $address = $this->http_input->getPost('type');
+        $res = $this->VoteClass->getVoteList($address);
+        if(!$res['IsSuccess']){
+            return $this->http_output->notPut('', $res['Message']);
+        }
+        return $this->http_output->lists($res['Data']);
+    }
+
+    /**
+     * 开始投票
+     */
+    public function http_surrender(){
+        $address = $this->http_input->getAllPostGet();
+        $res = $this->VoteClass->surrender($address);
+        if(!$res['IsSuccess']){
+            return $this->http_output->notPut('', $res['Message']);
+        }
+        return $this->http_output->lists($res['Data']);
+    }
+
+    /**
+     * 开始投票(需要传私钥和公玥)
+     */
+    public function http_surrenders(){
+        $address = $this->http_input->getAllPostGet();
+        $res = $this->VoteClass->surrenders($address);
+        if(!$res['IsSuccess']){
+            return $this->http_output->notPut('', $res['Message']);
+        }
+        return $this->http_output->lists($res['Data']);
+    }
+
+    /**
+     * 投票详情
+     */
+    public function http_getVoteDetail(){
+        $address = $this->http_input->getPost('address');
+        $res = $this->VoteClass->getVoteDetail($address);
+        if(!$res['IsSuccess']){
+            return $this->http_output->notPut('', $res['Message']);
+        }
+        return $this->http_output->lists($res['Data']);
+    }
+
+    /**
+     * 投票查看规则
+     */
+    public function http_getVoteRule()
+    {
+        $res = $this->VoteClass->getVoteRule();
+        if(!$res['IsSuccess']){
+            return $this->http_output->notPut('', $res['Message']);
+        }
+        return $this->http_output->lists($res['Data']);
+    }
+
+    /**
+     * 自动投票的页面
+     */
+    public function http_voteUserList()
+    {
+        $address = $this->http_input->getPost('address');
+        $res = $this->VoteClass->voteUserList($address);
+        if(!$res['IsSuccess']){
+            return $this->http_output->notPut('', $res['Message']);
+        }
+        return $this->http_output->lists($res['Data']);
+    }
+
+    /**
+     * 提交自动投票
+     */
+    public function http_automaticVote(){
+        $address = $this->http_input->getAllPostGet();
+        $data['address'] = $address['address'];
+        $data['status'] = $address['status'];
+        $data['voter'] = $address['voter']['values'];
+        $res = $this->VoteClass->automaticVote($data);
+        if(!$res['IsSuccess']){
+            return $this->http_output->notPut('', $res['Message']);
+        }
+        return $this->http_output->lists($res['Data']);
+    }
+
 }
