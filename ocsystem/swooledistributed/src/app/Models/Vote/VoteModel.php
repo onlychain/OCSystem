@@ -568,8 +568,191 @@ class VoteModel extends Model
         } else {
             return returnError('该地址不存在');
         }
-
     }
+
+    /**
+     * 权限开通之后操作(后面我会优化)
+     * 普通交易提交(数据要存在转账记录)
+     * @param array $data
+     * @param array $address
+     * @return bool
+     */
+    public function transacTion($data = [],$address = [])
+    {
+        $end_result['tx']= $data['tx'];
+        $end_result['to']= [
+            [
+                'address' => $address['address'],
+                'value'   => intval($address['value'] ),
+                'type'    => 1,
+            ]
+        ];
+        $end_result['privateKey'] = $address['privateKey'];
+        $end_result['publicKey'] = $address['publicKey'];
+        $end_result['ins'] = '';
+        $end_result['time'] = $data['time'];
+        $end_result['lockTime'] = $data['lockTime'];
+        $end_result['lockType'] = $data['lockType'];
+        $end_result['from'] = $address['address'];
+        $res = $this->encodeTrading($end_result);
+        $res = json_decode($res['body'], true);
+        if ($res['code'] == 200) {
+            //取出序列化
+            $trading['trading'] = $res['record'];
+            $trading['txId'] = bin2hex(hash('sha256', hash('sha256', hex2bin($res['record']), true), true));
+        } else {
+            return returnError('获取序列化请求超时');
+        }
+        $trading['noce'] = $data['noce'];
+        $trading['address'] = $address['address'];
+        $trading['renoce'] = '';
+        $result = $this->receivingTransactions($trading);
+        $result = json_decode($result['body'], true);
+        if ($result['code'] == 200) {
+            if ($result['record']['IsSuccess'] == false) {
+                return returnSuccess('', $result['Message']);
+            } else {
+                //转账交易存取数据库
+                $wireData = [
+                    $address['address'],
+                    $end_result['from'],
+                    intval($address['value']),
+                    $trading['trading'],
+                    1,
+                    time(),
+                    $trading['txId']
+                ];
+                $this->insertWireTrading($wireData);
+                return returnSuccess('', '打包中');
+            }
+        } else {
+            //转账交易存取数据库
+            $wireData = [
+                $address['address'],
+                $end_result['from'],
+                intval($address['value']),
+                $trading['trading'],
+                2,
+                time(),
+                $trading['txId']
+            ];
+            $this->insertWireTrading($wireData);
+            return returnError($result['msg']);
+        }
+    }
+
+    /**
+     * 查询区间高度，系统时间，已投
+     * @return bool
+     */
+    public function getCountOnly($address = '')
+    {
+        $end_result = [];
+        if (empty($address)) return returnError('请给我地址');
+        //查询当前轮次
+        $rounds = $this->getRounds();
+        if ($rounds['code'] == 200) {
+            $end_result['rounds'] = $rounds['record']['rounds'];
+            $end_result['sysTime'] = $rounds['record']['sysTime'];
+            $end_result['thisTime'] = floor($rounds['record']['thisTime']/126*100);
+            $end_result['blockHeight'] = $rounds['record']['blockHeight'];//区间高度
+        }
+        //查询已投的数量
+        $count = $this->VoteData->select('*')
+            ->from('t_user_vote')
+            ->query();
+        $count = $count['result'];
+        $end_result['countVote'] = count($count) ?? 0;
+        //拥有only的奖励
+        $countonly = $this->VoteData->select('*')
+            ->from('t_user_vote')
+            ->where(""," `vote` = '".$address."'","RAW")
+            ->query();
+        $countonly = $countonly['result'];
+        $end_result['onlyAward'] =  array_sum(array_column($countonly,'value'))/100000000 ?? 0;
+        if ($end_result['onlyAward'] == 0){
+            $end_result['onlyType'] = 1;
+        }else{
+            $end_result['onlyType'] = 2;
+        }
+        return returnSuccess($end_result, '获取成功');
+    }
+
+    /**
+     * 获取系统时间、轮次、轮次时间
+     * @param array $data
+     * @return mixed
+     */
+    public function getRounds($data = [])
+    {
+        $res = $this->VotePool->httpClient->setQuery($data)->coroutineExecute('/Node/getSystemInfo');
+        $res = json_decode($res['body'], true);
+        if ($res['code'] == 200) {
+            //获取查询节点列表存取数据
+            $queryData['rounds'] = $res['record']['rounds'];
+            $this->insertNoteList($queryData);
+        }
+        return $res;
+    }
+
+    /**
+     * 请求获取节点列表的数据
+     * @param array $data
+     */
+    public function insertNoteList($data = [])
+    {
+        $NoteList = [];//获取节点列表统计
+        $res = $this->VotePool->httpClient->setQuery($data)->coroutineExecute('/Node/getNodeList');
+        $res = json_decode($res['body'], true);
+        if ($res['code'] == 200) {
+            foreach ($res['record'] as $re_key => $re_val) {
+                foreach ($re_val['pledge'] as $key => $val) {
+                    $NoteList[$key]['name'] = '节点名称' . md5(time());
+                    $NoteList[$key]['content'] = '节点内容节点内容' . md5(time());
+                    $NoteList[$key]['value'] = $val['value'];
+                    $NoteList[$key]['txId'] = $val['txId'];
+                    $NoteList[$key]['lockTime'] = $val['lockTime'];
+                    $NoteList[$key]['node_address'] = $re_val['address'];
+                    $NoteList[$key]['created'] = time();
+                    $NoteList[$key]['votecount'] = $re_val['totalVote'];
+                    //存取节点数据
+                    $this->insertAddNote($NoteList, $val['txId']);
+                }
+                //存取投票数据
+                if ($re_val['voters'] != null) {
+                    $this->insertVoteList($re_val['voters'], $re_val['address'], $data['rounds']);
+                }
+            }
+        }
+    }
+
+    /**
+     * 保存节点数据
+     *
+     * @param array $data
+     * @param $txId
+     *
+     * @return bool
+     */
+    public function insertAddNote($data = [], $txId)
+    {
+        if (empty($txId)) return returnError('txid 没有数据');
+        //根据txId值保留一个
+        $txId_res = $this->VoteData->info('*')
+            ->from('t_pledge_node')
+            ->where("", "`txId` = '" . $txId . "'", "RAW")
+            ->query();
+        $txId_res = $txId_res['result'];
+        if (!$txId_res) {
+            $res = $this->VoteData->insertInto('t_pledge_node')
+                ->intoColumns(['name', 'content', 'value', 'txId', 'lockTime', 'node_address', 'created', 'votecount'])
+                ->intoValues($data)
+                ->query();
+            if (!$res) return returnError('添加失败');
+        }
+    }
+
+
 
 
 }
