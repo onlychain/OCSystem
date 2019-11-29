@@ -168,7 +168,6 @@ class TimeClockProcess extends Process
                     ProcessManager::getInstance()
                                     ->getRpcCall(ConsensusProcess::class)
                                     ->closeConsensus();
-
                     var_dump('开启新一轮节点更新');
                     var_dump('当前轮次:' . $this->getRounds());
                     /**
