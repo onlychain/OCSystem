@@ -46,7 +46,8 @@ class IncentivesProcess extends Process
     public function start($process)
     {
         var_dump('IncentivesProcess');
-        $this->MongoUrl = 'mongodb://localhost:27017';
+//        $this->MongoUrl = 'mongodb://localhost:27017';
+        $this->MongoUrl = 'mongodb://' . MONGO_IP . ":" . MONGO_PORT;
         $this->MongoDB = new \MongoDB\Client($this->MongoUrl);
         $this->Incentives = $this->MongoDB->selectCollection('Incentives', 'Incentives');
     }
@@ -212,7 +213,7 @@ class IncentivesProcess extends Process
     public function updateIncentivesTable(array $incentives = [], $table_num = 0)
     {
         //先修改缓存
-        CatCacheRpcProxy::getRpc()['Incentives'] = $incentives;
+//        CatCacheRpcProxy::getRpc()['Incentives'] = $incentives;
         //修改数据库
         $table_where = ['_id' => $table_num];
         $this->updateIncentives($table_where, $incentives[$table_num]);
@@ -224,7 +225,7 @@ class IncentivesProcess extends Process
      */
     public function getIncentivesTable()
     {
-        $incentives = CatCacheRpcProxy::getRpc()->offsetGet('Incentives');
+        $incentives = [];//CatCacheRpcProxy::getRpc()->offsetGet('Incentives');
         if(empty($incentives)) $incentives = $this->setIncentivesTable()['Data'];
         return returnSuccess($incentives);
     }
@@ -234,12 +235,12 @@ class IncentivesProcess extends Process
      */
     public function setIncentivesTable()
     {
-//        $incentives = $this->getIncentivesList();
+        $incentives = $this->getIncentivesList();
 //        //如果数据库里面没有数据，插入最原始的数据，同时发起共识从别的节点获取数据
-//        if(empty($incentives['Data'])){
+        if(empty($incentives['Data'])){
             $incentives = $this->originalTable();
-//        }
-        CatCacheRpcProxy::getRpc()['Incentives'] = $incentives['Data'];
+        }
+//        CatCacheRpcProxy::getRpc()['Incentives'] = $incentives['Data'];
         return returnSuccess($incentives['Data']);
     }
 
