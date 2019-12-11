@@ -456,7 +456,7 @@ class PurseModel extends Model
         if(!empty($txids)){
             $purse_where = [
                 '$and' => [['address' => $address]],
-                '$or'  => [['lockType' => ['$in' => [3,4]]], ['txId' => ['$in'   => $txids]]]
+                '$or'  => [['actionType' => ['$in' => [3,4]]], ['txId' => ['$in'   => $txids]]]
             ];
             $pagesize = count($trading) + 10;
         }
@@ -622,13 +622,14 @@ class PurseModel extends Model
         if(!empty($purse_res['Data'])){
             foreach ($purse_res['Data'] as $pr_key => $pr_val){
                 $purse[$pr_val['txId']] = [
-                    'txId'          =>  $pr_val['txId'],
-                    'n'             =>  $pr_val['n'],
-                    'value'         =>  $pr_val['value'],
-                    'reqSigs'       =>  $pr_val['reqSigs'],
-                    'lockBlock'     =>  $pr_val['lockBlock'],
-                    'lockTime'      =>  $pr_val['lockTime'],
-                    'lockType'      =>  $pr_val['lockType'],
+                    'txId'              =>  $pr_val['txId'],
+                    'n'                 =>  $pr_val['n'],
+                    'value'             =>  $pr_val['value'],
+                    'reqSigs'           =>  $pr_val['reqSigs'],
+                    'createdBlock'      =>  $pr_val['createdBlock'],
+                    'lockTime'          =>  $pr_val['lockTime'],
+                    'address'           =>  $pr_val['address'],
+                    'actionType'        =>  $pr_val['actionType'],
                 ];
             }
         }

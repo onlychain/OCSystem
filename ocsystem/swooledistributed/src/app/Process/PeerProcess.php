@@ -15,13 +15,16 @@ use app\Models\Trading\TradingModel;
 use app\Models\Node\NodeModel;
 use app\Models\Node\VoteModel;
 use app\Models\Block\BlockHeadModel;
+use app\Models\Action\ActionEncodeModel;
 use app\Models\Block\MerkleTreeModel;
 use Server\Components\Process\Process;
 use Server\Components\CatCache\CatCacheRpcProxy;
+use BitcoinPHP\BitcoinECDSA\BitcoinECDSA;
 use MongoDB;
 
 use Server\Components\Process\ProcessManager;
 use app\Process\TradingProcess;
+use app\Process\TradingPoolProcess;
 use app\Process\BlockProcess;
 use app\Process\PurseProcess;
 
@@ -59,20 +62,41 @@ class PeerProcess extends Process
     private $NodeModel;
 
     /**
+     * 加签函数
+     * @var
+     */
+    private $BitcoinECDSA;
+
+    /**
+     * action序列化模型
+     * @var
+     */
+    private $ActionEncodeModel;
+
+    /**
      * 初始化函数
      * @param $process
      */
     public function start($process)
     {
         var_dump('PeerProcess');
+        $context = getNullContext();
         //实例化交易模型
         $this->TradingModel = new TradingModel();
+        $this->TradingModel->initialization($context);
         //实例化区块模型
         $this->BlockModel = new BlockBaseModel();
+        $this->BlockModel->initialization($context);
         //实例化节点模型
         $this->NodeModel = new NodeModel();
+        $this->NodeModel->initialization($context);
         //实例化投票模型
         $this->VoteModel = new VoteModel();
+        $this->VoteModel->initialization($context);
+        //实例化投票模型
+        $this->BitcoinECDSA = new BitcoinECDSA();
+        //实例化投票模型
+        $this->ActionEncodeModel = new ActionEncodeModel();
         $this->init();
 
         p2p_initialized([$this, 'KADInitialize']);
@@ -155,11 +179,17 @@ class PeerProcess extends Process
             switch ($kes[0]){
                 case 'Block' :
                     var_dump('回调区块同步方法');
-                    //执行区块同步函数
+                    $decode_block = [];//存储解析后的区块
 //                var_dump($values);
+                    foreach ($values as $v_key => $v_val){
+                        $decode_block[] = json_decode(stripslashes(html_entity_decode($v_val)), true);
+                    }
+                    var_dump(1111);
+                    array_multisort(array_column($decode_block, 'height'),SORT_ASC, $decode_block);
+                    //执行区块同步函数
                     ProcessManager::getInstance()
                                 ->getRpcCall(BlockProcess::class, true)
-                                ->syncBlock($values);
+                                ->syncBlock($decode_block);
                     break;
                 case 'Trading' :
                     //执行交易同步函数
@@ -344,7 +374,7 @@ class PeerProcess extends Process
     public function getBroadcast($sender, $TTL, $content)
     {
 //        var_dump($content);
-        $context = getNullContext();
+//        $context = getNullContext();
 //        var_dump($content);
         //反序列化数据
         $res = [];//验证返回结果
@@ -354,30 +384,60 @@ class PeerProcess extends Process
         //根据具体的广播数据进行处理，不合法就不再进行广播
         switch ($decode_content['broadcastType']){
             case 'Block' :
-                $this->BlockModel->initialization($context);
                 $res = $this->BlockModel->checkBlockRequest($decode_content['Data'], 2, 2);
                 break;
             case 'Trading' :
-                $this->TradingModel->initialization($context);
                 $res = $this->TradingModel->checkTradingRequest($decode_content['Data'], 2, 2);
                 break;
             case 'Vote' :
-                $this->VoteModel->initialization($context);
                 $res = $this->VoteModel->checkVoteRequest($decode_content['Data'], 2);
                 break;
             case 'Pledge' :
-                $this->NodeModel->initialization($context);
                 $res = $this->NodeModel->checkNodeRequest($decode_content['Data'], 1, 2);
                 break;
             case 'Node' :
-                $this->NodeModel->initialization($context);
                 $res = $this->NodeModel->syncNode($decode_content['Data']);
                 break;
             case 'SuperNode' :
-                $this->NodeModel->initialization($context);
                 $res = $this->NodeModel->syncSuperNode($decode_content['Data']);
                 break;
-
+            case 'Action' :
+                $broadcast_message = $decode_content['Data'];
+                //验证签名
+                    var_dump($broadcast_message);
+//                $decode_content = $this->BitcoinECDSA->checkSignatureForRawMessage($broadcast_message);
+//                if(!$decode_content['IsSuccess']){
+//                    var_dump(1);
+//                    return returnError('签名失败.');
+//                }
+//                var_dump(2);
+//                $decode_content = $decode_content['Data'];
+//                var_dump($decode_content);
+                $decode_action['action'] = $this->ActionEncodeModel->decodeAction($broadcast_message);
+                if($decode_action['action'] == false){
+                    return false;
+                }
+                $check = ProcessManager::getInstance()
+                                    ->getRpcCall(TradingPoolProcess::class)
+                                    ->removalDuplicate('', $decode_action['action']['txId']);
+                if(!$check['IsSuccess']){
+                    return false;
+                }
+                //多余的操作，以后优化掉
+                $decode_action['address'] = $decode_action['action']['address'];
+                var_dump($decode_action);
+                switch ($decode_action['action']['actionType']){
+                    case 2 :
+                        $res = $this->VoteModel->checkVoteRequest($decode_action, $broadcast_message, 2);
+                        break;
+                    case 3 :
+                        $res = $this->NodeModel->checkNodeRequest($decode_action, $broadcast_message, 1, 2);
+                        break;
+                    default:
+                        $res = $this->TradingModel->checkTradingRequest($decode_action, $broadcast_message, 2, 2);
+                        break;
+                }
+                break;
             default :
                 return false;
                 break;

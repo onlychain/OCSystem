@@ -52,6 +52,12 @@ class TimeClockProcess extends Process
     private $ConsensusModel;
 
     /**
+     * 核心节点个数
+     * @var
+     */
+    private $CoreNodeNum = 9;
+
+    /**
      * 初始化函数
      * @param $process
      */
@@ -61,6 +67,15 @@ class TimeClockProcess extends Process
         $this->clock = 0;//初始化时间钟
         $this->clockState = false;//时间钟状态
         $this->ConsensusModel = new ConsensusModel();//实例化共识模型
+    }
+
+    /**
+     * 获取核心节点个数
+     * @return int
+     */
+    public function getCoreNodeNum()
+    {
+        return $this->CoreNodeNum;
     }
 
     /**
@@ -99,7 +114,7 @@ class TimeClockProcess extends Process
     }
 
     /**
-     * 获取区块轮次
+     * 设置区块轮次
      * @return int
      */
     public function setRounds(int $rounds)
@@ -210,7 +225,7 @@ class TimeClockProcess extends Process
                         ProcessManager::getInstance()
                             ->getRpcCall(ConsensusProcess::class)
                             ->setNodeIdentity('ordinary');
-                    } elseif ($rotation_res['Data']['index'] > 3) {
+                    } elseif ($rotation_res['Data']['index'] > $this->getCoreNodeNum()) {
                         //设置节点身份
                         ProcessManager::getInstance()
                             ->getRpcCall(ConsensusProcess::class)
@@ -230,20 +245,20 @@ class TimeClockProcess extends Process
                             ->openConsensus();
                     }
 //                    //广播节点数据
-                    ProcessManager::getInstance()
-                        ->getRpcCall(PeerProcess::class, true)
-                        ->broadcast(json_encode(['broadcastType' => 'Node', 'Data' => $examination_res['Data']['node']]));
-
-                    //广播超级节点
-                    ProcessManager::getInstance()
-                        ->getRpcCall(PeerProcess::class, true)
-                        ->broadcast(json_encode(['broadcastType' => 'SuperNode', 'Data' => $rotation_res['Data']['superNode']]));
+//                    ProcessManager::getInstance()
+//                        ->getRpcCall(PeerProcess::class, true)
+//                        ->broadcast(json_encode(['broadcastType' => 'Node', 'Data' => $examination_res['Data']['node']]));
+//
+//                    //广播超级节点
+//                    ProcessManager::getInstance()
+//                        ->getRpcCall(PeerProcess::class, true)
+//                        ->broadcast(json_encode(['broadcastType' => 'SuperNode', 'Data' => $rotation_res['Data']['superNode']]));
 
                     var_dump('round change over.');
                 }
                 ProcessManager::getInstance()
-                    ->getRpcCall(ConsensusProcess::class, true)
-                    ->chooseWork(ceil(getTickTime() / 1000) - $this->getDifference() % 126);
+                            ->getRpcCall(ConsensusProcess::class, true)
+                            ->chooseWork(ceil(getTickTime() / 1000) - $this->getDifference() % 126);
 //                var_dump((ceil(getTickTime() / 1000) - $this->getDifference()) % 126);
             }
     }
