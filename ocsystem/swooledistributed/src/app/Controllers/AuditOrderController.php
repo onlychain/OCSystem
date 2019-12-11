@@ -45,7 +45,7 @@ class AuditOrderController extends Controller
         $address_type = $this->http_input->getAllPostGet() ?? 1;
         //生成私钥
         $this->bitcoinECDSA->generateRandomPrivateKey();
-
+//        $this->bitcoinECDSA->setPrivateKey();
         //获取私钥
         $privatek = $this->bitcoinECDSA->getPrivateKey();
 
@@ -70,7 +70,6 @@ class AuditOrderController extends Controller
                 break;
         }
 
-
         //组装返回结果
         $res = [
             'privateKey'    =>  $privatek,
@@ -89,14 +88,53 @@ class AuditOrderController extends Controller
     {
         $sign_data = $this->http_input->getAllPostGet();
         $ttt = $sign_data['message'];
-        $trading_sign = $this->Validation->getScript($sign_data['message']);
-        $trading = $this->Validation->getScriptSig($trading_sign['Data'], $sign_data['privateKey'], $sign_data['publicKey']);
-        foreach ($ttt['tx'] as $ts_key => $ts_val){
-            $ttt['tx'][$ts_key]['scriptSig'] = $trading['Data'][$ts_key];
-        }
-
         $this->bitcoinECDSA->setPrivateKey($sign_data['privateKey']);
-        $sign = $this->bitcoinECDSA->signMessage(json_encode($ttt));
+        $sign = $this->bitcoinECDSA->signMessage($ttt);
+        return $this->http_output->end($sign);
+    }
+
+
+    public function http_testActionEncode()
+    {
+
+//        $sign_data = $this->http_input->getAllPostGet();
+        $msg = '6';;
+        $privateKey = '66e5d90ddcb85090d13cc9f9bd2794fdb9958a608b8bd27092783faa2a7ed7c8';
+//        $trading_sign = $this->Validation->getScript($sign_data['message']);
+//        $trading = $this->Validation->getScriptSig($trading_sign['Data'], $sign_data['privateKey'], $sign_data['publicKey']);
+//        foreach ($ttt['tx'] as $ts_key => $ts_val){
+//            $ttt['tx'][$ts_key]['scriptSig'] = $trading['Data'][$ts_key];
+//        }
+        var_dump('加签内容:');
+        var_dump($msg);
+        var_dump('使用的私钥:');
+        var_dump($privateKey);
+        $this->bitcoinECDSA->setPrivateKey($privateKey);
+        $sign = $this->bitcoinECDSA->signMessage($msg, false, true, '999');
+        var_dump('加密后的消息体:');
+        var_dump($sign);
+        $sign = $this->bitcoinECDSA->checkSignatureForRawMessage($sign);
+        var_dump('验证用的验签:');
+//        var_dump($sign);
+
+        $sign = $this->bitcoinECDSA->signMessage($msg, true, true, '999');
+        var_dump($sign);
+        return;
+        $res = $this->bitcoinECDSA->checkSignatureForMessage('792b9a33bebdd38114fa12c2699ed7112be40b95', $sign, $msg);
+        var_dump($res);
+        var_dump(bin2hex($sign));
+        var_dump(hex2bin(bin2hex($sign)));
+        return $this->http_output->end($sign);
+    }
+
+    public function http_testActionDncode()
+    {
+        $sign = 'Hy5DvnoSkWz28xKlE/y2yYtwjOLdGNxOv3KoB8nIoxsNPKmmLnZSGGmY1o0EfbEJCcaiXt5IJ60OVypO5sX6tAQ=';
+        $msg = '6';
+        $res = $this->bitcoinECDSA->checkSignatureForMessage('792b9a33bebdd38114fa12c2699ed7112be40b95', $sign, $msg);
+        var_dump($res);
+        var_dump(bin2hex($sign));
+        var_dump(hex2bin(bin2hex($sign)));
         return $this->http_output->end($sign);
     }
 
