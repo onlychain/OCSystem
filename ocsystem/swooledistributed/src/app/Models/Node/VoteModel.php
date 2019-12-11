@@ -12,6 +12,7 @@ namespace app\Models\Node;
 use Server\CoreBase\Model;
 use Server\CoreBase\ChildProxy;
 use Server\CoreBase\SwooleException;
+use BitcoinPHP\BitcoinECDSA\BitcoinECDSA;
 use Server\Components\CatCache\TimerCallBack;
 use Server\Components\CatCache\CatCacheRpcProxy;
 //自定义进程
@@ -56,6 +57,12 @@ class VoteModel extends Model
     protected $now_round;
 
     /**
+     * 加签规则
+     * @var
+     */
+    protected $BitcoinECDSA;
+
+    /**
      * 当被loader时会调用这个方法进行初始化
      * @param $context
      */
@@ -68,6 +75,8 @@ class VoteModel extends Model
         $this->TradingEncodeModel = $this->loader->model('Trading/TradingEncodeModel', $this);
         //调用生成交易模型
         $this->CreateTradingModel = $this->loader->model('Trading/CreateTradingModel', $this);
+        //实例化椭圆曲线加密算法
+        $this->BitcoinECDSA = new BitcoinECDSA();
     }
 
 
@@ -111,7 +120,18 @@ class VoteModel extends Model
         }
         $vote_res = [];//投票插入结果
         $vote = [];//质押内容
-        if($type == 1){
+
+        $votes_where = [
+            'rounds'    => $vote_data['rounds'],
+            'voter'     =>  $vote_data['voter'],
+        ];
+        $votes_data = ['_id' => 0];
+        $vote_res = ProcessManager::getInstance()
+                                ->getRpcCall(VoteProcess::class)
+                                ->getVoteInfo($votes_where, $votes_data);
+
+
+        if(!empty($vote_res['Data'])){
             //有投过票
             $vote_where = [
                 'rounds'    => $vote_data['rounds'],
@@ -155,6 +175,7 @@ class VoteModel extends Model
      */
     public function checkVote($vote_data = [], $type = 1)
     {
+//        var_dump($vote_data);
         $flag = 2;
         //最新区块的高度
         $now_top_height = ProcessManager::getInstance()
@@ -224,13 +245,10 @@ class VoteModel extends Model
             if(($vote_res['Data']['value'] + $vote_data['trading']['value']) < 1000000000000)
                 return returnError('总质押量必须大于10000个Only');
 
+
             if (!empty($vote_res['Data']['txId'])){
                 //证交易是否已经被使用
-                var_dump($vote_data['trading']['txId']);
-                var_dump(21231);
-                var_dump($vote_res['Data']['txId']);
                 foreach ($vote_res['Data']['txId'] as $vr_val){
-                    var_dump($vr_val);
                     if(in_array($vr_val, $vote_data['trading']['txId'])){
                         return returnError('该交易已经用于投票.');
                     }
@@ -289,10 +307,11 @@ class VoteModel extends Model
 
     /**
      * 验证投票请求
-     * @param array $vote_data
+     * @param array $decode_action
+     * @param array $encode_action
      * @return bool
      */
-    public function checkVoteRequest($vote_data = [], $is_broadcast = 1)
+    public function checkVoteRequest($decode_action = [], $encode_action = '', $is_broadcast = 1, $check_type = 1)
     {
         $vote_res = [];//投票操作结果
         $check_vote = [];//需要验证的投票数据
@@ -300,37 +319,35 @@ class VoteModel extends Model
         $check_trading_res = [];//交易验证结果
         $trading_res = [];//交易操作验证结果
 
-        //做交易所有权验证
-//        $validation = $this->Validation->varifySign($trading_data);
-//        if(!$validation['IsSuccess']){
-//            return $this->http_output->notPut($validation['Code'], $validation['Message']);
-//        }
-        if (!is_array($vote_data['noder']) || count($vote_data['noder']) > 30){
+
+        if (!is_array($decode_action['action']['action']['candidate']) || count($decode_action['action']['action']['candidate']) > 30){
             return returnError('投票节点有误!');
         }
+        if($decode_action['action']['actionType'] != 2){
+            return returnError('质押类型有误.');
+        }
 
-        $check_vote['rounds'] = $vote_data['rounds'];//所投轮次
-        $check_vote['voter'] = $vote_data['voter'];//质押人员
-        $vote_type = $vote_data['voteAgain'] ?? 1;//投票类型
+//        if($is_broadcast == 2){
+//            //广播数据需要再解一次签名
+//            $action_message = $encode_action;
+//            $encode_action = $this->BitcoinECDSA->checkSignatureForRawMessage($encode_action)['Data']['action'];
+//        }
 
-        //反序列化交易
-        if(!empty($vote_data['pledge']['trading'])){
-            $decode_trading = $this->TradingEncodeModel->decodeTrading($vote_data['pledge']['trading']);
-            if($decode_trading == false){
-                return returnError('交易有误.');
-            }
-            if($decode_trading['lockType'] != 2){
-                return returnError('质押类型有误.');
-            }
-            $check_vote['trading']['value'] = $decode_trading['vout'][0]['value'] ?? 0;//质押金额(循环获取)
-            $check_vote['trading']['lockTime'] = $decode_trading['lockTime'];//质押时间
+        $check_vote['rounds'] = $decode_action['action']['action']['rounds'];//所投轮次
+        $check_vote['voter'] = $decode_action['action']['action']['voter'];//质押人员
+        $vote_type = $decode_action['action']['action']['again'] == 1 ? 3 : 2;//投票类型
+
+        //判断是否有提交质押的交易
+        if(!empty($decode_action['action']['trading'])){
+            $check_vote['trading']['value'] = $decode_action['action']['trading']['vout'][0]['value'] ?? 0;//质押金额
+            $check_vote['trading']['lockTime'] = $decode_action['action']['trading']['lockTime'];//质押时间
             //根据投票类型，插入质押的txId
             if($vote_type == 1){
-                $check_vote['trading']['txId'][$decode_trading['txId']] = $decode_trading['txId'];
+                $check_vote['trading']['txId'][$decode_action['action']['txId']] = $decode_action['action']['txId'];
             }else{
                 //重质押获取vin中的txId
-                $check_vote['trading']['txId'][$decode_trading['txId']] = $decode_trading['txId'];
-                foreach ($decode_trading['vin'] as $dt_val){
+//                $check_vote['trading']['txId'][$decode_action['txId']] = $decode_action['txId'];
+                foreach ($decode_action['action']['trading']['vin'] as $dt_val){
                     $check_vote['trading']['txId'][$dt_val['txId']] = $dt_val['txId'];
                 }
             }
@@ -340,39 +357,63 @@ class VoteModel extends Model
             $check_vote['trading'] = [];
             $decode_trading = [];
         }
+        //确认投票
         $check_vote_res = $this->checkVote($check_vote, $vote_type);
         if(!$check_vote_res['IsSuccess']) {
             return returnError($check_vote_res['Message']);
         }
+        //验证用户是否重复投票
+        if($check_type == 1){
+            $vote_cache = ProcessManager::getInstance()
+                                    ->getRpcCall(VoteProcess::class)
+                                    ->setVoteCache($decode_action['action']['action']['rounds'], $decode_action['action']['action']['voter']);
+            if (!$vote_cache['IsSuccess']){
+                return $vote_cache;
+            }
+        }else{
+            $vote_type = $decode_action['action']['action']['again'] == 1 ? 1 : 4;//投票类型
+//            $vote_type = 1;
+        }
+
         //如果没有交易将交易数据赋值为0
         //验证交易是否可用
+        var_dump($vote_type);
         $check_trading_res = ProcessManager::getInstance()
                                         ->getRpcCall(TradingProcess::class)
-                                        ->checkTrading($decode_trading, $vote_data['voter'], $vote_type);
+                                        ->checkTrading($decode_action['action'], $decode_action['action']['address'], $vote_type);
         if(!$check_trading_res['IsSuccess']){
             return returnError($check_trading_res['Message'], $check_trading_res['Code']);
         }
 
-        if($vote_type == 1 && !empty($vote_data['pledge']['trading'])){
-            //交易入库
-            $trading_res = $this->TradingModel->createTradingEecode($vote_data['pledge']);
-            if(!$trading_res['IsSuccess']){
-                return returnError($trading_res['Message']);
-            }
-        }
+//        if($vote_type == 1 && !empty($vote_data['trading'])){
+//            //交易入库
+//            $trading_res = $this->TradingModel->createTradingEecode($vote_data['pledge']);
+//            if(!$trading_res['IsSuccess']){
+//                return returnError($trading_res['Message']);
+//            }
+//        }
 
         //交易验证成功，投票写入数据库
-        $check_vote['address'] = $vote_data['noder'];
-        $vote_res = $this->submitVote($check_vote, $check_vote_res['Data']['flag']);
-        if(!$vote_res['IsSuccess']){
-            return returnError($vote_res['Message']);
+//        $check_vote['address'] = $decode_action['action']['action']['candidate'];
+//        $vote_res = $this->submitVote($check_vote, $check_vote_res['Data']['flag']);
+//        if(!$vote_res['IsSuccess']){
+//            return returnError($vote_res['Message']);
+//        }
+        //action入库
+        if($check_type == 1){
+            $insert_res = $this->TradingModel->createTradingEecode($encode_action);
+            if(!$insert_res['IsSuccess']){
+                return returnError($insert_res['Message'], 'ffffffff');
+            }
         }
         if($is_broadcast == 2){
             ProcessManager::getInstance()
                             ->getRpcCall(PeerProcess::class, true)
-                            ->broadcast(json_encode(['broadcastType' => 'Vote', 'Data' => $vote_data]));
+                            ->broadcast(json_encode(['broadcastType' => 'Action', 'Data' => $encode_action]));
         }
         return returnSuccess();
     }
+
+
 
 }

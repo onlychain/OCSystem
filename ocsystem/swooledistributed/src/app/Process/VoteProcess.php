@@ -39,6 +39,13 @@ class VoteProcess extends Process
      * @var
      */
     private $MongoUrl;
+
+
+    /**
+     * 投票缓存
+     * @var
+     */
+    private $VoteCache = [];
     /**
      * 初始化函数
      * @param $process
@@ -46,7 +53,8 @@ class VoteProcess extends Process
     public function start($process)
     {
         var_dump('VoteProcess');
-        $this->MongoUrl = 'mongodb://localhost:27017';
+//        $this->MongoUrl = 'mongodb://localhost:27017';
+        $this->MongoUrl = 'mongodb://' . MONGO_IP . ":" . MONGO_PORT;
         $this->MongoDB = new \MongoDB\Client($this->MongoUrl);
         $this->Vote = $this->MongoDB->selectCollection('nodes', 'vote');
     }
@@ -246,6 +254,30 @@ class VoteProcess extends Process
             return returnError('修改失败!');
         }
         return returnSuccess();
+    }
+
+    /**
+     * 设置缓存
+     * @param int $round
+     * @param string $voter
+     * @return bool
+     */
+    public function setVoteCache($round = 0, $voter = '')
+    {
+        if(!isset($this->VoteCache[$round][$voter])){
+            $this->VoteCache[$round][$voter] = 1;
+        }else{
+            return returnError('该用户已经投过票,请等待节点确认.');
+        }
+        return returnSuccess();
+    }
+
+    /**
+     * 清除投票者缓存
+     */
+    public function clearVoteCache()
+    {
+        $this->VoteCache = [];
     }
 
     /**
