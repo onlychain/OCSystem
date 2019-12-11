@@ -12,6 +12,7 @@ namespace app\Models\Node;
 use Server\CoreBase\Model;
 use Server\CoreBase\ChildProxy;
 use Server\CoreBase\SwooleException;
+use BitcoinPHP\BitcoinECDSA\BitcoinECDSA;
 use Server\Components\CatCache\TimerCallBack;
 use Server\Components\CatCache\CatCacheRpcProxy;
 //自定义进程
@@ -56,6 +57,17 @@ class NodeModel extends Model
      */
     private $NodeState = false;
 
+    /**
+     * 加签规则
+     * @var
+     */
+    protected $BitcoinECDSA;
+
+    /**
+     * 节点质押缓存
+     * @var array
+     */
+    protected $NodeCache = [];
 
     /**
      * 当被loader时会调用这个方法进行初始化
@@ -69,6 +81,8 @@ class NodeModel extends Model
         $this->TradingModel = $this->loader->model('Trading/TradingModel', $this);
         //实例化交易序列化模型
         $this->TradingEncodeModel = $this->loader->model('Trading/TradingEncodeModel', $this);
+        //实例化椭圆曲线加密算法
+        $this->BitcoinECDSA = new BitcoinECDSA();
     }
 
     /**
@@ -123,6 +137,8 @@ class NodeModel extends Model
                 'txId'      => $node_data['txId'],
                 'lockTime'  => $node_data['lockTime'],
             ];
+            $node['ip'] = empty($node_data['ip']) ? $node['ip'] : $node_data['ip'];
+            $node['port'] = empty($node_data['port']) ? $node['port'] : $node_data['port'];
             foreach ($node['pledge'] as $np_key => $np_val){
                 $total_pledge += $np_val['value'];
             }
@@ -131,7 +147,7 @@ class NodeModel extends Model
             //修改数据
 
             $node_where = ['address' => $node['address']];
-            $node_data = ['$set' => ['pledge' => $node['pledge'], 'state' => $node['state']]];
+            $node_data = ['$set' => ['pledge' => $node['pledge'], 'state' => $node['state'], 'ip' => $node['ip'], 'port' => $node['port']]];
             $res = ProcessManager::getInstance()
                                     ->getRpcCall(NodeProcess::class)
                                     ->updateNode($node_where, $node_data);
@@ -172,71 +188,131 @@ class NodeModel extends Model
         if(($node_data['lockTime'] - $top_block_height - 15768000) < 0){
             return returnError('质押时间有误');
         }
+
+        //判断action是否已经被提交过
+        $node_where = [
+            'address'  =>  $node_data['address'],
+        ];//查询条件
+        $node_info_data = [];//查询字段
+        $node_res = ProcessManager::getInstance()
+                                ->getRpcCall(NodeProcess::class)
+                                ->getNodeInfo($node_where, $node_info_data)['Data'];
+        if(!empty($node_res)){
+            foreach ($node_res['pledge'] as $np_key => $np_val){
+                if($np_val['txId'] == $node_data['txId']){
+                    return returnError('该action已经用于质押.');
+                }
+            }
+            //判断质押的修改是否是由节点发起的
+            if(!empty($node_data['ip']) &&
+                $node_data['address'] != $node_data['pledge'] &&
+                $node_data['ip'] != $node_res['ip']){
+                return returnError('修改节点ip必须由节点自身发起.');
+            }
+            if(!empty($node_data['port']) &&
+                $node_data['address'] != $node_data['pledge'] &&
+                $node_data['port'] != $node_res['port']){
+                return returnError('修改节点port必须由节点自身发起.');
+            }
+        }
+
+
         return returnSuccess();
     }
 
     /**
-     * 验证交易数据
-     * @param array $node_data
+     *  验证交易数据
+     *  @param array $decode_action解析后的action数据
+     *  @param array $encode_action未解析的action数据
+     *  @param array $type 1：验证交易,不清除交易缓存，2：验证交易，清除交易缓存
      * @return bool
      */
-    public function checkNodeRequest(array $node_data = [], $type = 1, $is_broadcast = 1)
+    public function checkNodeRequest(array $decode_action = [], $encode_action = '', $type = 1, $is_broadcast = 1)
     {
         $node_res = [];//投票操作结果
         $check_node = [];//需要验证的投票数据
         $check_node_res = [];//投票验证结果
         $check_trading_res = [];//交易验证结果
-        $decode_trading = [];//交易解析后的数据
         $trading_res = [];//交易操作验证结果
+        $check_trading_type = 1;//验证交易类型
         //做交易所有权验证
 //        $validation = $this->Validation->varifySign($trading_data);
 //        if(!$validation['IsSuccess']){
 //            return $this->http_output->notPut($validation['Code'], $validation['Message']);
 //        }
 
-        //反序列化交易['pledge']
-        $decode_trading = $this->TradingEncodeModel->decodeTrading($node_data['pledge']['trading']);
-        if($decode_trading == false){
-            return returnError('交易有误.');
-        }
+
         //判断质押类型是否有误
-        if($decode_trading['lockType'] != 3)
+        if($decode_action['action']['actionType'] != 3)
             return returnError('质押类型有误!');
 
-        $check_node['value'] = $decode_trading['vout'][0]['value'];//质押金额
-        $check_node['lockTime'] = $decode_trading['lockTime'];//质押时间
+//        if($is_broadcast == 2){
+//            //广播数据需要再解一次签名
+//            $action_message = $encode_action;
+//            $encode_action = $this->BitcoinECDSA->checkSignatureForRawMessage($encode_action)['Data']['action'];
+//        }
+
+        $check_node['value'] = $decode_action['action']['trading']['vout'][0]['value'];//质押金额
+        $check_node['lockTime'] = $decode_action['action']['trading']['lockTime'];//质押时间
+        $check_node['address'] = $decode_action['action']['action']['pledgeNode'];
+        $check_node['pledge'] = $decode_action['action']['action']['pledge'];
+        $check_node['ip'] = $decode_action['action']['action']['ip'];
+        $check_node['port'] = $decode_action['action']['action']['port'];
+        $check_node['txId'] = $decode_action['action']['txId'];
+        //验证质押详情
         $check_node_res = $this->checkNode($check_node);
         if(!$check_node_res['IsSuccess']){
             return returnError($check_node_res['Message']);
         }
+        //写入缓存
         if($type == 1){
-            //验证交易是否可用
-            $check_trading_res = ProcessManager::getInstance()
-                                            ->getRpcCall(TradingProcess::class)
-                                            ->checkTrading($decode_trading, $node_data['pledge']['address']);
-            if(!$check_trading_res['IsSuccess']){
-                return returnError($check_trading_res['Message'], $check_trading_res['Code']);
+            //每次出块都清除一次
+            $node_cache = ProcessManager::getInstance()
+                                        ->getRpcCall(NodeProcess::class)
+                                        ->setNodeCache($decode_action['action']['action']['pledge']);
+            if (!$node_cache['IsSuccess']){
+                return $node_cache;
             }
-            //交易入库
-            $trading_res = $this->TradingModel->createTradingEecode($node_data['pledge']);
-            if(!$trading_res['IsSuccess']){
-                return returnError($trading_res['Message']);
+            //兼容处理区块出块验证与用户提交验证
+            $check_trading_type = 3;
+        }
+        //验证交易是否可用
+        $check_trading_res = ProcessManager::getInstance()
+                                        ->getRpcCall(TradingProcess::class)
+                                        ->checkTrading($decode_action['action'], $decode_action['action']['address'], $check_trading_type);
+        if(!$check_trading_res['IsSuccess'] || empty($check_trading_res['Data'])){
+            return returnError($check_trading_res['Message']);
+        }
+//            //交易入库
+//            $trading_res = $this->TradingModel->createTradingEecode($node_data['pledge']);
+//            if(!$trading_res['IsSuccess']){
+//                return returnError($trading_res['Message']);
+//            }
+
+
+        //交易验证成功，质押写入数据库
+//        $check_node['address'] = $decode_action['action']['action']['pledgeNode'];
+//        $check_node['ip']   = $decode_action['action']['action']['ip'];
+//        $check_node['port'] = $decode_action['action']['action']['port'];
+//        $check_node['txId'] = $decode_action['action']['txId'];
+//        $node_res = $this->submitNode($check_node);
+//        if(!$node_res['IsSuccess']){
+//            return returnError($node_res['Message']);
+//        }
+        //action入库
+        var_dump(2);
+        if($type == 1){
+            var_dump(3);
+            $insert_res = $this->TradingModel->createTradingEecode($encode_action);
+            if(!$insert_res['IsSuccess']){
+                return returnError($insert_res['Message'], 'ffffffff');
             }
         }
 
-        //交易验证成功，质押写入数据库
-        $check_node['address'] = $node_data['noder'];
-        $check_node['ip']   = $node_data['ip'];
-        $check_node['port'] = $node_data['port'];
-        $check_node['txId'] = $decode_trading['txId'];
-        $node_res = $this->submitNode($check_node);
-        if(!$node_res['IsSuccess']){
-            return returnError($node_res['Message']);
-        }
         if($is_broadcast == 2){
             ProcessManager::getInstance()
                 ->getRpcCall(PeerProcess::class, true)
-                ->broadcast(json_encode(['broadcastType' => 'Pledge', 'Data' => $node_data]));
+                ->broadcast(json_encode(['broadcastType' => 'Action', 'Data' => $encode_action]));
         }
         return returnSuccess();
     }
@@ -314,4 +390,6 @@ class NodeModel extends Model
         $this->NodeState = true;
         return returnSuccess();
     }
+
+
 }

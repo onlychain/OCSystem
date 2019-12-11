@@ -46,7 +46,8 @@ class SuperNodeProcess extends Process
     public function start($process)
     {
         var_dump('NoteProcess');
-        $this->MongoUrl = 'mongodb://localhost:27017';
+//        $this->MongoUrl = 'mongodb://localhost:27017';
+        $this->MongoUrl = 'mongodb://' . MONGO_IP . ":" . MONGO_PORT;
         $this->MongoDB = new \MongoDB\Client($this->MongoUrl);
         $this->SuperNode = $this->MongoDB->selectCollection('nodes', 'superNode');
     }
