@@ -11,7 +11,7 @@ namespace app\Process;
 
 use Server\Components\CatCache\CatCacheRpcProxy;
 use app\Models\Trading\ValidationModel;
-use app\Models\Trading\TradingEncodeModel;
+use app\Models\Action\ActionEncodeModel;
 use app\Models\Purse\PurseModel;
 use MongoDB;
 
@@ -103,13 +103,15 @@ class TradingProcess extends Process
     public function start($process)
     {
         var_dump('TradingProcess');
-        $this->MongoUrl = 'mongodb://localhost:27017';
+//        $this->MongoUrl = 'mongodb://localhost:27017';
+        $this->MongoUrl = 'mongodb://' . MONGO_IP . ":" . MONGO_PORT;
         $this->MongoDB = new \MongoDB\Client($this->MongoUrl);
         $this->Trading = $this->MongoDB->selectCollection('tradings', 'trading');
         //载入验证模型
         $this->Validation = new ValidationModel();
-        //载入交易序列化模型
-        $this->EncodeTrading = new TradingEncodeModel();
+        //载入action序列化模型
+//        $this->EncodeTrading = new TradingEncodeModel();
+        $this->EncodeTrading = new ActionEncodeModel();
         //载入钱包模型
         $this->PurseModel = new PurseModel();
     }
@@ -365,52 +367,64 @@ class TradingProcess extends Process
      * @param string 用户地址
      * @param int $type 1：正常交易，清理钱包以及缓存中的数据
      *                  2：仅仅只做验证，不清理数据
+     *                  3：验证锁定时间，不清理数据
      * @return array|bool
      */
     public function checkTrading($trading = [], $address = '', $type = 1)
     {
+        var_dump($type);
         //获取最新的区块高度
         $top_block_height = ProcessManager::getInstance()
                                         ->getRpcCall(BlockProcess::class)
                                         ->getTopBlockHeight();
-        if($type == 1 && !empty($trading) && abs($trading['lockBlock'] - $top_block_height) > 10){
+        if(in_array($type, [1, 3]) && !empty($trading) && abs($trading['createdBlock'] - $top_block_height) > 10){
             return returnError('交易当前锁定时间有误!');
         }
         //定义全局变量
         global $del_trading;
         $equity = 0;
-        $vin = $trading['vin'] ?? [];
+        $vin = $trading['trading']['vin'] ?? [];
+        var_dump(12);
         $purses = $this->getAvailableTrading($address, $vin);
         if(!$purses['IsSuccess']){
             return returnError($purses['Message']);
         }
         $purses = $purses['Data'];
-        if(empty($trading) || !in_array($trading['lockType'], [3,4])){
+        var_dump(2);
+        if(empty($trading) || !in_array($trading['actionType'], [3,4])){
             //循环查看是否有权限质押交易
             foreach ($purses as $p_key => $k_val){
-                if(($k_val['lockTime'] - $k_val['lockBlock'] + 63) >= 15768000){
+                if(($k_val['lockTime'] - $k_val['createdBlock'] + 63) >= 15768000){
                     $equity += $k_val['value'];
                 }
             }
         }else{
             $equity = 50000000000;
         }
-
+        var_dump(3);
         //判断是否有交易权限
         if($equity < 50000000000){
             return returnError('没有交易权限，请先质押相应的only开启权限。');
         }
         //有交易权限但是笔数超了
         $count_trading = $this->TradingNum[$address] ?? 0;
-        if($equity < 500000000000 && $count_trading + count($trading['vout']) > 5){
+        if($equity < 500000000000 && $count_trading + count($trading['trading']['vout']) > 5){
             return returnError('没有开通大批量交易权限，请先质押相应的only开启权限');
         }
-
         //没有交易输入，不再往下运行代码
-        if(empty($trading['vout'])){
-            return returnSuccess([], '有交易权限，请引入交易输入.');
+        if(empty($trading['trading']['vout'])){
+            return returnSuccess([], '有交易权限，请引入交易输出.');
         }
-        $this->Using = CatCacheRpcProxy::getRpc()->offsetGet('Using');
+        //有交易输入没有交易输出，返回错误
+        if(empty($trading['trading']['vin'])){
+            return returnError('有交易权限，请引入交易输入.');
+        }
+        //清理交易数据结构
+        $clear_res = $this->clearTradingData($trading['trading']);
+        if(!$clear_res['IsSuccess']){
+            return $clear_res;
+        }
+//        $this->Using = CatCacheRpcProxy::getRpc()->offsetGet('Using');
         //获取最新的区块高度
         $top_block_height = ProcessManager::getInstance()
                                         ->getRpcCall(BlockProcess::class)
@@ -428,7 +442,9 @@ class TradingProcess extends Process
          * $purses用户所用的交易输出
          * $availabler_ecords交易数据统计
          * $top_block_height当前最高区块
-         * $type 1:正常交易， 2：不验证锁定时间，不进行交易处理，仅做交易可用性验证
+         * $type 1:正常交易，
+         *       2：不验证锁定时间，不进行交易处理，仅做交易可用性验证
+         *       3：验证锁定时间，不进行交易处理，仅做交易可用性验证
          */
         array_map(function ($tx, $to) use ($address, &$purses, &$availabler_ecords, $top_block_height, $type)
         {
@@ -444,9 +460,9 @@ class TradingProcess extends Process
                 $availabler_ecords['total_cost'] += $to['value'];
             }
             //处理交易输入
-            if($tx != null && isset($purses[$tx['txId']])){
+            if($tx != null && isset($purses[$tx['txId']]) && $purses[$tx['txId']]['n'] == $tx['n']){
                 //判断交易是否被锁定
-                if($type == 1){
+                if(in_array($type, [1, 3])){
                     if($top_block_height < $purses[$tx['txId']]['lockTime']){
                         return returnError('当前交易不可用');
                     }
@@ -479,14 +495,19 @@ class TradingProcess extends Process
                 ];
                 $availabler_ecords['total_val'] += $purses[$tx['txId']]['value'];
                 //把被使用的交易写入Using
-                $this->Using[$tx['txId']][$tx['n']] = $purses[$tx['txId']];
-                if(count($purses[$tx['txId']]) === 1){
-                    unset($purses[$tx['txId']]);
-                }else{
-                    unset($purses[$tx['txId']]);
+                if(in_array($type, [1, 4])){
+//                    $this->Using[$tx['txId'] . $tx['n']] = $purses[$tx['txId']];
+//                    var_dump($purses);
+                    CatCacheRpcProxy::getRpc()['Using' . $tx['txId'] . $tx['n']] = $purses[$tx['txId']];
+                    if(count($purses[$tx['txId']]) === 1){
+                        unset($purses[$tx['txId']]);
+                    }else{
+                        unset($purses[$tx['txId']]);
+                    }
                 }
+
             }
-        }, $trading['vin'], $trading['vout']);
+        }, $trading['trading']['vin'], $trading['trading']['vout']);
         //正常交易验证
 
             //判断交易金额是否充足
@@ -499,17 +520,45 @@ class TradingProcess extends Process
                     'address'   =>  $address,
                 ];
             }
-        if($type == 1){
+        if(in_array($type, [1, 4])){
             //清理缓存
             $purses = $this->PurseModel->rushPurse($address, $purses, $del_trading);
             //存入撤回用缓存
-            CatCacheRpcProxy::getRpc()['Using'] = $this->Using;
+//            CatCacheRpcProxy::getRpc()['Using'] = $this->Using;
+        }else{
+            $this->TradingNum[$address] = isset($this->TradingNum[$address]) ? $this->TradingNum[$address] + count($trading['trading']['vout']) : 0;
         }
-        $this->TradingNum[$address] = isset($this->TradingNum[$address]) ? $this->TradingNum[$address] + count($trading['vout']) : 0;
         //删除全局变量
         $del_trading = [];
         return returnSuccess($availabler_ecords);
     }
+
+    /**
+     * 清除重复的交易输入与输出
+     * @param array $trading
+     * @return array
+     */
+    public function clearTradingData(array $trading = [])
+    {
+        $remove = [];//清除相同的输入输出
+        foreach ($trading['vin'] as $tvin_key => $tvin_val){
+            if(isset($remove[$tvin_val['txId'] . $tvin_val['n']])){
+                return returnError('有重复的交易输入.');
+            }else{
+                $remove[$tvin_val['txId'] . $tvin_val['n']] = 1;
+            }
+        }
+        $remove = [];//清除相同的输入输出
+        foreach ($trading['vout'] as $tvout_key => $tvout_val){
+            if(isset($remove[$tvout_val['address']])){
+                return returnError('有相同的地址输入.');
+            }else{
+                $remove[$tvout_val['address']] = 1;
+            }
+        }
+        return returnSuccess();
+    }
+
 
     /**
      * 获取需要的钱

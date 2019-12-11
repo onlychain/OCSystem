@@ -10,6 +10,7 @@
 namespace app\Process;
 
 use app\Models\Trading\TradingEncodeModel;
+use app\Models\Action\ActionEncodeModel;
 use app\Models\Purse\PurseModel;
 
 use Server\Components\CatCache\CatCacheRpcProxy;
@@ -55,11 +56,13 @@ class TradingPoolProcess extends Process
     public function start($process)
     {
         var_dump('TradingPoolProcess');
-        $this->MongoUrl = 'mongodb://localhost:27017';
+//        $this->MongoUrl = 'mongodb://localhost:27017';
+        $this->MongoUrl = 'mongodb://' . MONGO_IP . ":" . MONGO_PORT;
         $this->MongoDB = new \MongoDB\Client($this->MongoUrl);
         $this->TradingPool = $this->MongoDB->selectCollection('tradings', 'tradingPool');
         //载交易序列化模型
-        $this->EncodeTrading = new TradingEncodeModel();
+//        $this->EncodeTrading = new TradingEncodeModel();
+        $this->EncodeTrading = new ActionEncodeModel();
         //钱包模型
         $this->PurseModel = new PurseModel();
     }
@@ -301,6 +304,98 @@ class TradingPoolProcess extends Process
         CatCacheRpcProxy::getRpc()['Using'] = $using;
         //返回消息
         return returnSuccess();
+    }
+
+
+    /**
+     * 退还交易缓存数据
+     * @param array $action_text
+     * @return bool
+     * @oneWay
+     */
+    public function refundTradingCache(array $action_text = [])
+    {
+        $purses = [];//钱包
+        if(empty($action_text)){
+            return returnError('请输入要退还的交易!');
+        }
+        //先查询交易
+        $where = ['_id'  => ['$in' => $action_text]];
+        $data = [];
+        $old_trading = $this->getTradingPoolList($where, $data);
+        if(empty($old_trading['Data'])){
+            return returnError('没有改交易或交易已被打包.');
+        }
+
+        //删除该交易
+        foreach ($old_trading['Data'] as $ot_key => $ot_val){
+            $decode_action = $this->EncodeTrading->decodeAction($ot_val['trading']);
+            if(!$decode_action){
+                continue;
+            }
+            if(in_array($decode_action['actionType'], [5, 6, 7, 8])){
+                continue;
+            }
+            if (!empty($decode_action['trading'])){
+                foreach ($decode_action['trading']['vin'] as $ott_key => $ott_val){
+                    $purses = CatCacheRpcProxy::getRpc()['Using' . $ott_val['txId'] . $ott_val['n']];
+                    $insert_purse[] = [
+                        'address'       =>  $purses['address'],
+                        'txId'          =>  $purses['txId'],
+                        'n'             =>  $purses['n'],
+                        'value'         =>  $purses['value'],
+                        'reqSigs'       =>  $purses['reqSigs'],
+                        'lockTime'      =>  $purses['lockTime'],
+                        'createdBlock'  =>  $purses['createdBlock'],
+                        'actionType'    =>  $purses['actionType'],
+                    ];
+                    unset(CatCacheRpcProxy::getRpc()['Using' . $ott_val['txId'] . $ott_val['n']]);
+                }
+            }
+        }
+        //删除交易池数据
+        $del_trading = $this->deleteTradingPool($where);
+        //刷新钱包，把恢复的交易写入钱包数据库
+        //把撤回的数据插入数据库
+        $this->PurseModel->addPurseTradings($insert_purse);
+        //返回消息
+        return returnSuccess();
+    }
+
+    /**
+     * 验证action是否已经存在
+     * @param string $action
+     * @return bool
+     */
+    public function removalDuplicate(string $action = '', string $action_txid = '')
+    {
+        if($action == '' && $action_txid != ''){
+            $tx_id = bin2hex(hash('sha256', hash('sha256', hex2bin($action), true), true));
+        }elseif($action != '' && $action_txid == ''){
+            $tx_id = $action_txid;
+        }else{
+            return returnError('请传入action或者actionTxId任意一个数据.');
+        }
+
+        $where = [
+            '_id' => $tx_id
+        ];
+        $res = $this->getTradingPoolInfo($where);
+        if(!empty($res['Data'])){
+            return returnError('action已存在.');
+        }
+        return returnSuccess();
+    }
+
+    /**
+     * 退还交易缓存数据
+     * @param array $action_text
+     * @return bool
+     * @oneWay
+     */
+    public function clearTradingCache()
+    {
+
     }
 
     /**
