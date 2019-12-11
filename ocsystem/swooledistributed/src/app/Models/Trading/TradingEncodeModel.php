@@ -12,10 +12,9 @@ namespace app\Models\Trading;
 use Server\CoreBase\Model;
 use Server\CoreBase\ChildProxy;
 use Server\CoreBase\SwooleException;
+use BitcoinPHP\BitcoinECDSA\BitcoinECDSA;
 use Server\Components\CatCache\TimerCallBack;
 use Server\Components\CatCache\CatCacheRpcProxy;
-
-use MongoDB;
 
 class TradingEncodeModel extends Model
 {
@@ -116,6 +115,12 @@ class TradingEncodeModel extends Model
     protected $lockBlock = '00000000';
 
     /**
+     * 存储椭圆曲线加密函数
+     * @var
+     */
+    protected $BitcoinECDSA = null;
+
+    /**
      * 当被loader时会调用这个方法进行初始化
      * @param $context
      */
@@ -211,6 +216,9 @@ class TradingEncodeModel extends Model
      */
     public function decodeTrading(string $trading = '')
     {
+        if($this->BitcoinECDSA == null){
+            $this->BitcoinECDSA = new BitcoinECDSA();
+        }
         if($trading == ''){
             return returnError('请输入交易!');
         }
