@@ -17,6 +17,7 @@ use Server\Components\Process\Process;
 //自定义进程
 use app\Process\VoteProcess;
 use app\Process\SuperNoteProcess;
+use app\Process\TimeClockProcess;
 use Server\Components\Process\ProcessManager;
 use MongoDB;
 
@@ -40,6 +41,12 @@ class NodeProcess extends Process
      * @var
      */
     private $MongoUrl;
+
+    /**
+     * 节点缓存
+     * @var
+     */
+    private $NodeCache = [];
     /**
      * 初始化函数
      * @param $process
@@ -47,7 +54,8 @@ class NodeProcess extends Process
     public function start($process)
     {
         var_dump('NoteProcess');
-        $this->MongoUrl = 'mongodb://localhost:27017';
+//        $this->MongoUrl = 'mongodb://localhost:27017';
+        $this->MongoUrl = 'mongodb://' . MONGO_IP . ":" . MONGO_PORT;
         $this->MongoDB = new \MongoDB\Client($this->MongoUrl);
         $this->Node = $this->MongoDB->selectCollection('nodes', 'node');
     }
@@ -241,6 +249,7 @@ class NodeProcess extends Process
             $new_super_node[$nd_val['address']]['port'] = $nd_val['port'];
             //取质押的40%
             $new_super_node[$nd_val['address']]['value'] = floor(array_sum(array_column($nd_val['pledge'], 'value')) * 0.4);
+            $new_super_node[$nd_val['address']]['voterNum'] = 0;
         }
         //先获取下一轮的投票结果,先设定获取一百万条数据
         $incentive_users = [];//可以享受激励的一千个用户地址
@@ -253,11 +262,14 @@ class NodeProcess extends Process
             //有投票数据
             foreach ($vote_res['Data'] as $vr_key => $vr_val){
                 //组装各节点所有用户投票数据
-                $incentive_users[$vr_val['address']][] = [
-                    'address'   => $vr_val['voter'],
-                    'value'     => number_format($vr_val['value'], 0, '', ''),
-                ];
+                if($vr_val['value'] >= 1000000000000){
+                    $incentive_users[$vr_val['address']][] = [
+                        'address'   => $vr_val['voter'],
+                        'value'     => number_format($vr_val['value'], 0, '', ''),
+                    ];
+                }
                 $new_super_node[$vr_val['address']]['value'] += floor(50000000000 * 0.6);
+                ++$new_super_node[$vr_val['address']]['voterNum'];
             }
         }
         //对值进行排序
@@ -276,6 +288,13 @@ class NodeProcess extends Process
             $new_super_node[$nsn_key]['value'] = number_format($new_super_node[$nsn_key]['value'], 0, '', '');
             ++$count;
         }
+        //获取核心节点个数
+        $core_node_num = ProcessManager::getInstance()
+                                        ->getRpcCall(TimeClockProcess::class)
+                                        ->getCoreNodeNum();
+        //更新缓存
+        CatCacheRpcProxy::getRpc()['SuperNode'] = [];
+        CatCacheRpcProxy::getRpc()['SuperNode'] = array_keys(array_slice($new_super_node, 0, $core_node_num));
         $new_super_node = array_values($new_super_node);
         //先删除超级节点数据
         $del_res = ProcessManager::getInstance()
@@ -287,7 +306,11 @@ class NodeProcess extends Process
         //插入新的超级节点数据
         ProcessManager::getInstance()
                         ->getRpcCall(SuperNodeProcess::class)
-                        ->insertSuperNodeMany($new_super_node);
+                        ->insertSuperNodeMany(array_slice($new_super_node, 0, $core_node_num));
+        //删除旧的投票数据
+        ProcessManager::getInstance()
+                    ->getRpcCall(VoteProcess::class, true)
+                    ->deleteVotePoolMany(['rounds' => ['$lt' => $rounds - 1]]);
         var_dump('over2');
         return returnSuccess(['superNode' => $new_super_node, 'index' => $node_rounds]);
     }
@@ -337,6 +360,30 @@ class NodeProcess extends Process
         var_dump('over');
         return returnSuccess(['node' => $all_node['Data']]);
     }
+
+    /**
+     * 设置节点缓存
+     * @param string $pledge
+     * @return bool
+     */
+    public function setNodeCache($pledge = '')
+    {
+        if (!isset($this->NodeCache[$pledge])){
+            $this->NodeCache[$pledge] = 1;
+        }else{
+            return returnError('该用户已经质押过数据,请等待节点确认.');
+        }
+        return returnSuccess();
+    }
+
+    /**
+     * 清除超级节点质押请求缓存
+     */
+    public function clearNodeCache()
+    {
+        $this->NodeCache = [];
+    }
+
     /**
      * 进程结束函数
      * @param $process

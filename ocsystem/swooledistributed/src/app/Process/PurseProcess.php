@@ -57,7 +57,8 @@ class PurseProcess extends Process
     public function start($process)
     {
         var_dump('PurseProcess');
-        $this->MongoUrl = 'mongodb://localhost:27017';
+//        $this->MongoUrl = 'mongodb://localhost:27017';
+        $this->MongoUrl = 'mongodb://' . MONGO_IP . ":" . MONGO_PORT;
         $this->MongoDB = new \MongoDB\Client($this->MongoUrl);
         $this->Purse = $this->MongoDB->selectCollection('purses', 'purse');
 

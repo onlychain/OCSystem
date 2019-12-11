@@ -12,6 +12,7 @@ namespace app\Models\Trading;
 use Server\CoreBase\Model;
 use Server\CoreBase\ChildProxy;
 use Server\CoreBase\SwooleException;
+use BitcoinPHP\BitcoinECDSA\BitcoinECDSA;
 use Server\Components\CatCache\TimerCallBack;
 use Server\Components\CatCache\CatCacheRpcProxy;
 //自定义进程
@@ -61,6 +62,12 @@ class TradingModel extends Model
      * @var
      */
     protected $CreateTradingModel;
+
+    /**
+     * 加签规则
+     * @var
+     */
+    protected $BitcoinECDSA;
     /**
      * 初始化函数
      * @param $context
@@ -77,8 +84,12 @@ class TradingModel extends Model
         $this->BlockModel = $this->loader->model('Block/BlockBaseModel', $this);
         //调用创建交易模型
         $this->CreateTradingModel = $this->loader->model('Trading/CreateTradingModel', $this);
+//        //调用交易序列化模型
+//        $this->TradingEncodeModel = $this->loader->model('Trading/TradingEncodeModel', $this);
         //调用交易序列化模型
-        $this->TradingEncodeModel = $this->loader->model('Trading/TradingEncodeModel', $this);
+        $this->TradingEncodeModel = $this->loader->model('Action/ActionEncodeModel', $this);
+        //实例化椭圆曲线加密算法
+        $this->BitcoinECDSA = new BitcoinECDSA();
 
     }
 
@@ -115,17 +126,17 @@ class TradingModel extends Model
      * @param array $trading
      * @return bool
      */
-    public function createTradingEecode($trading = [])
+    public function createTradingEecode($trading = [], $noce = 'ffffffff')
     {
         //验证交易
         if(empty($trading)) return returnError('请输入交易内容!');
         //把交易存入交易池数据库
-        $new_utxo['_id']    = bin2hex(hash('sha256', hash('sha256', hex2bin($trading['trading']), true),true));
-        $new_utxo['trading'] = $trading['trading'];
-        $new_utxo['noce'] = $trading['noce'];
+        $new_utxo['_id']    = bin2hex(hash('sha256', hash('sha256', hex2bin($trading), true),true));
+        $new_utxo['trading'] = $trading;
+        $new_utxo['noce'] = $noce;
         $insert_res = ProcessManager::getInstance()
-                            ->getRpcCall(TradingPoolProcess::class)
-                            ->insertTradingPool($new_utxo);
+                                    ->getRpcCall(TradingPoolProcess::class)
+                                    ->insertTradingPool($new_utxo);
         if(!$insert_res['IsSuccess']){
             return returnError('交易异常!', 1005);
         }
@@ -187,7 +198,7 @@ class TradingModel extends Model
                                 ->getTradingInfo($where, $data);
         if(!empty($trading['Data'])){
             //把交易反序列化
-            $trading_res = $this->TradingEncodeModel->decodeTrading($trading['Data']['trading']);
+            $trading_res = $this->TradingEncodeModel->decodeAction($trading['Data']['trading']);
             if($trading_res == false){
                 return returnError('交易有误.');
             }
@@ -223,17 +234,16 @@ class TradingModel extends Model
     }
 
     /**
-     * 验证交易请求
-     * @param array $trading_data
+     * 验证交易类型的action请求
+     * @param array $decode_action解析后的action数据
+     * @param array $encode_action序列化的action数据
+     * @param int $type 1:需要验证，但是不清除数据 2:直接入库，3:验证交易同时清除缓存
+     * @param int $is_broadcast 1:非广播数据 2:广播数据
      * @return bool
      */
-    public function checkTradingRequest(array $trading_data = [], $type = 1, $is_broadcast = 1)
+    public function checkTradingRequest(array $decode_action = [], $encode_action, $type = 1, $is_broadcast = 1)
     {
-        //做交易所有权验证
-//        $validation = $this->Validation->varifySign($trading_data);
-//        if(!$validation['IsSuccess']){
-//            return $this->http_output->notPut($validation['Code'], $validation['Message']);
-//        }
+        $check_trading_type = 1;
         //判断节点是否在同步
         $sync = ProcessManager::getInstance()
                                 ->getRpcCall(BlockProcess::class)
@@ -241,66 +251,87 @@ class TradingModel extends Model
         if(in_array($sync, [1, 2])){
             return returnError('区块数据同步中，无法接收交易。');
         }
-        //反序列化交易
-        $decode_trading = $this->TradingEncodeModel->decodeTrading($trading_data['trading']);
-        if($decode_trading == false){
-            return returnError('交易有误.');
+//        if($is_broadcast == 2){
+//            var_dump(5);
+//            //广播数据需要再解一次签名
+//            $action_message = $encode_action;
+//            $encode_action = $this->BitcoinECDSA->checkSignatureForRawMessage($encode_action)['Data']['action'];
+//            var_dump(6);
+//        }
+        if(!in_array($decode_action['action']['actionType'], [1, 4, 5, 6, 7, 8])){
+            var_dump('该action不是交易action.');
+            return returnError('该action不是交易action.');
         }
         //判断是否是coinbase交易
-        if(!empty($decode_trading['vin'][0]['coinbase'])){
+        if(!empty($decode_action['action']['trading']['vin'][0]['coinbase'])){
             $identity = ProcessManager::getInstance()
                                         ->getRpcCall(ConsensusProcess::class)
                                         ->getNodeIdentity();
             if($identity == 'core' && $is_broadcast == 2){
+                var_dump(73);
                 return returnError('超级节点不接收coinbase交易广播.');
             }
             if($type == 2){
                 //同步到coinbase交易处理
-                $this->delSycnCoinbase($trading_data['trading']);
+                $this->delSycnCoinbase($decode_action['action']['trading']);
                 return returnSuccess();
             }
             return returnError('交易有误，不能提交coinbase交易.');
         }
-        //空着等对接
-        if(!empty($trading_data['renoce']) || $trading_data['renoce'] != ''){
-            //判断交易质押类型是否可以撤销
-            if(in_array($decode_trading['lockType'],[2,3,4])){
-                return returnError('该交易无法重置.');
-            }
-            //执行撤回交易
-            $recall = ProcessManager::getInstance()
-                                    ->getRpcCall(TradingPoolProcess::class)
-                                    ->recallTrading($trading_data, $trading_data['address']);
-            if(!$recall['IsSuccess']){
-                return returnError('该交易无法重置.');
-            }
-        }else{
-            //查看交易是否已经提交过了
-            $check_where = [
-                'txId' => $decode_trading['txId'],
-            ];
-            $check_res = $this->queryTradingPool($check_where);
-            if(!empty($check_res['Data'])){
-                return returnError('请勿重复提交交易.');
-            }
+        //空着等对接(撤销修改为另一个接口)
+//        if(!empty($trading_data['renoce']) || $trading_data['renoce'] != ''){
+//            //判断交易质押类型是否可以撤销
+//            if(in_array($decode_trading['lockType'],[2,3,4])){
+//                return returnError('该交易无法重置.');
+//            }
+//            //执行撤回交易
+//            $recall = ProcessManager::getInstance()
+//                                    ->getRpcCall(TradingPoolProcess::class)
+//                                    ->recallTrading($trading_data, $trading_data['address']);
+//            if(!$recall['IsSuccess']){
+//                return returnError('该交易无法重置.');
+//            }
+//        }else{
+//            //查看交易是否已经提交过了
+//            $check_where = [
+//                'txId' => $decode_trading['txId'],
+//            ];
+//            $check_res = $this->queryTradingPool($check_where);
+//            if(!empty($check_res['Data'])){
+//                return returnError('请勿重复提交交易.');
+//            }
+//        }
+
+        //兼容处理交易验证模式
+        if($type == 1){
+            $check_trading_type = 3;
+        }elseif($type == 3){
+            $check_trading_type = 1;
         }
         //验证交易是否可用$decode_trading;
         $check_res = ProcessManager::getInstance()
                                     ->getRpcCall(TradingProcess::class)
-                                    ->checkTrading($decode_trading, $trading_data['address']);
-        if(!$check_res['IsSuccess']){
-            return returnError($check_res['Message'], $check_res['Code']);
+                                    ->checkTrading($decode_action['action'], $decode_action['action']['address'], $check_trading_type);
+        var_dump(4);
+        if(!$check_res['IsSuccess'] || empty($check_res['Data'])){
+            var_dump(5);
+            return returnError($check_res['Message']);
         }
-        //交易入库
-        $insert_res = $this->createTradingEecode($trading_data);
-        if(!$insert_res['IsSuccess']){
-            return returnError($insert_res['Message'], $insert_res['Code']);
+        //交易action入库
+        var_dump(6);
+        if($type != 3){
+            $insert_res = $this->createTradingEecode($encode_action);
+            if(!$insert_res['IsSuccess']){
+                return returnError($insert_res['Message'], $insert_res['Code']);
+            }
         }
+        var_dump(7);
         if($is_broadcast == 2){
             ProcessManager::getInstance()
                             ->getRpcCall(PeerProcess::class, true)
-                            ->broadcast(json_encode(['broadcastType' => 'Trading', 'Data' => $trading_data]));
+                            ->broadcast(json_encode(['broadcastType' => 'Action', 'Data' => $encode_action]));
         }
+        var_dump(8);
         return returnSuccess();
     }
 

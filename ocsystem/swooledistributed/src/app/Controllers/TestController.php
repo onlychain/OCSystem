@@ -16,6 +16,7 @@ use app\Process\TimeClockProcess;
 use app\Process\CoreNetworkProcess;
 use app\Process\NodeProcess;
 use app\Process\PeerProcess;
+use BitcoinPHP\BitcoinECDSA\BitcoinECDSA;
 use Server\Components\Process\ProcessManager;
 
 use Server\Components\CatCache\CatCacheRpcProxy;
@@ -26,6 +27,12 @@ class TestController extends Controller
     protected $TradingModel;//交易处理模型
     protected $TradingEncodeModel;//交易序列化模型
     protected $Index;//交易序列化模型
+    protected $ActionEncodeModel;//交易序列化模型
+    /**
+     * 存储椭圆曲线加密函数
+     * @var
+     */
+    protected $bitcoinECDSA;
     protected function initialization($controller_name, $method_name)
     {
         parent::initialization($controller_name, $method_name);
@@ -33,6 +40,9 @@ class TestController extends Controller
         $this->Index = $this->loader->model('Index/IndexModel', $this);
         $this->TradingModel = $this->loader->model('Trading/TradingModel', $this);
         $this->TradingEncodeModel = $this->loader->model('Trading/TradingEncodeModel', $this);
+        $this->ActionEncodeModel = $this->loader->model('Action/ActionEncodeModel', $this);
+        //实例化椭圆曲线加密算法
+        $this->bitcoinECDSA = new BitcoinECDSA();
     }
 
     public function http_testAddress()
@@ -186,7 +196,7 @@ class TestController extends Controller
     public function http_pack()
     {
 
-        var_dump($this->context);
+//        var_dump($this->context);
 
         $check_res = ProcessManager::getInstance()
                     ->getRpcCall(ConsensusProcess::class, true)
@@ -253,12 +263,17 @@ class TestController extends Controller
         $public_key_hash160 = hash('ripemd160', hash('sha256', hex2bin($public_key), true));
         $scriptPubKey_bytecode = script_compile("DUP HASH160 [$public_key_hash160] EQUALVERIFY CHECKSIG"); // 假设这是前一输出的脚本
         $temp_script = script_remove_codeseparator($scriptPubKey_bytecode);
-        $aaa = '6666';
+        $aaa = '66';
         $raw_tx = $aaa.bin2hex($temp_script); // 假设序列化结果是这样（列举具体示例太麻烦，这里结果无论是什么都不会影响验证结果）
         $msg = hash('sha256', hash('sha256', hex2bin($raw_tx), true), true); // 进行2次sha256，得到32字节的消息
         $signature = bin2hex(secp256k1_sign($private_key, $msg)); // 得到签名
         $scriptSig_bytecode = script_compile("[$signature] [$public_key]"); // 得到输入脚本，并写到对应的输入上
-
+        var_dump('secp256k1_sign计算后的结果:');
+        var_dump($signature);
+        var_dump('script_compile加上:');
+        var_dump(bin2hex($scriptSig_bytecode));
+        var_dump('secp256k1_sign计算后的结果:');
+        var_dump(bin2hex($scriptPubKey_bytecode));
 
         return $this->http_output->lists([bin2hex($scriptSig_bytecode), bin2hex($scriptPubKey_bytecode)]);
     }
@@ -356,7 +371,15 @@ class TestController extends Controller
 
         ProcessManager::getInstance()
                         ->getRpcCall(NodeProcess::class)
-                        ->rotationSuperNode(4);
+                        ->rotationSuperNode(1);
+    }
+
+    public function http_index()
+    {
+        ProcessManager::getInstance()
+            ->getRpcCall(BlockProcess::class)
+            ->checkGenesisBlock();
+
     }
 
     public function http_openClock()
@@ -634,4 +657,112 @@ class TestController extends Controller
         if (!script_verify($ctx)) return $this->http_output->notPut('','sig验证失败'); // 所有的script_eval不能失败，并且script_verify为true才算验证通过
         return $this->http_output->yesPut();
     }
+
+    public function http_encodeAction()
+    {
+        $action = $this->http_input->getAllPostGet();
+        $res = [];
+        switch ($action['actionType']){
+            case  2 :
+                $res = $this->ActionEncodeModel->setVout($action['to'])
+                                                 ->setVin($action['tx'])
+                                                 ->setIns($action['ins'])
+                                                 ->setTime(time())
+                                                 ->setLockTime($action['lockTime'])
+                                                 ->setCandidate($action['candidate'])
+                                                 ->setRounds($action['rounds'])
+                                                 ->setVoter($action['voter'])
+                                                 ->setAgain($action['voteAgain'])
+                                                 ->setPublicKey($action['publicKey'])
+                                                 ->setPrivateKey($action['privateKey'])
+                                                 ->setActionType($action['actionType'])
+                                                 ->encodeAction();
+                break;
+            case  3 :$res = $this->ActionEncodeModel->setVout($action['to'])
+                                                    ->setVin($action['tx'])
+                                                    ->setIns($action['ins'])
+                                                    ->setTime(time())
+                                                    ->setLockTime($action['lockTime'])
+                                                    ->setPledge($action['pledge'])
+                                                    ->setPledgeNode($action['pledgeNode'])
+                                                    ->setIp($action['ip'])
+                                                    ->setPort($action['port'])
+                                                    ->setPublicKey($action['publicKey'])
+                                                    ->setPrivateKey($action['privateKey'])
+                                                    ->setActionType($action['actionType'])
+                                                    ->encodeAction();
+                                                    break;
+            default :$res = $this->ActionEncodeModel->setVout($action['to'])
+                                                    ->setVin($action['tx'])
+                                                    ->setIns($action['ins'])
+                                                    ->setTime(time())
+                                                    ->setLockTime($action['lockTime'])
+                                                    ->setPublicKey($action['publicKey'])
+                                                    ->setPrivateKey($action['privateKey'])
+                                                    ->setActionType($action['actionType'])
+                                                    ->encodeAction();
+                                                    break;
+        }
+        return $this->http_output->lists($res);
+    }
+
+    public function http_decodeAction()
+    {
+        $action = $this->http_input->getAllPostGet();
+        $res = $this->ActionEncodeModel->decodeAction($action['action']);
+        return $this->http_output->lists($res);
+    }
+
+    public function http_testEncryption()
+    {
+//        $sign_data = $this->http_input->getAllPostGet();
+        $ttt = '666';//$sign_data['message'];
+        $count = [];
+        $recount = [];
+        for($i = 0; $i <= 1000; $i++){
+            $this->bitcoinECDSA = new BitcoinECDSA();
+            $this->bitcoinECDSA->setPrivateKey('66e5d90ddcb85090d13cc9f9bd2794fdb9958a608b8bd27092783faa2a7ed7c8');
+            $address = $this->bitcoinECDSA->getAddress();
+            $publick = $this->bitcoinECDSA->getPubKey();
+            if(isset($count[$address])){
+                $count[$address] += 1;
+            }else{
+                $count[$address] = 0;
+            }
+
+            if (isset($count[$publick])){
+                $count[$publick] += 1;
+            }else{
+                $count[$publick] = 0;
+            }
+            $sign = $this->bitcoinECDSA->signMessage($ttt, true);
+            $this->bitcoinECDSA = null;
+            $this->bitcoinECDSA = new BitcoinECDSA();
+            $ck = $this->bitcoinECDSA->checkSignatureForMessage($address, $sign, $ttt);
+            if(isset($recount[$ck['address']])){
+                $recount[$ck['address']] += 1;
+            }else{
+                $recount[$ck['address']] = 0;
+            }
+
+            if (isset($recount[$ck['publicKey']])){
+                $recount[$ck['publicKey']] += 1;
+            }else{
+                $recount[$ck['publicKey']] = 0;
+            }
+            $this->bitcoinECDSA = null;
+
+        }
+        var_dump($count);
+        var_dump($recount);
+
+//        $this->bitcoinECDSA->setPrivateKey('66e5d90ddcb85090d13cc9f9bd2794fdb9958a608b8bd27092783faa2a7ed7c8');
+
+        //获取公钥
+
+//
+        return $this->http_output->end([$count, $recount]);
+    }
+
+
 }

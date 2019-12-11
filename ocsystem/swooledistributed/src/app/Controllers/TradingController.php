@@ -85,7 +85,7 @@ class TradingController extends Controller
         $page = $select_where['page'] ?? 1;
         $pagesize = $select_where['pagesize'] ?? 100;
 
-        $purse_res = $this->PurseModel->getPurseFromMongoDb($purse_where, $purse_data, intval($page), intval($pagesize));
+        $purse_res = $this->PurseModel->getPurseFromMongoDb($purse_where, $purse_data, intval($page), intval($pagesize),['createdBlock' => 1]);
         sort($purse_res);
         return $this->http_output->lists($purse_res);
     }
@@ -154,6 +154,7 @@ class TradingController extends Controller
                                         ->setTime($trading['time'])
                                         ->setLockTime($trading['lockTime'])
                                         ->setLockType($trading['lockType'])
+                                        ->setLockType($trading['lockType'])
                                         ->setPrivateKey($trading['privateKey'])
                                         ->setPublicKey($trading['publicKey'])
                                         ->encodeTrading();
@@ -169,7 +170,8 @@ class TradingController extends Controller
     public function http_decodeTrading()
     {
         $trading = $this->http_input->getAllPostGet();
-        $res = $this->TradingEncodeModel->decodeTrading($trading['trading']);
+//        $res = $this->TradingEncodeModel->decodeTrading($trading['trading']);
+        $res = $this->TradingEncodeModel->decodeAction($trading['trading']);
         if($res == false){
             return $this->http_output->notPut('', '交易有误.');
         }
@@ -276,7 +278,7 @@ class TradingController extends Controller
     {
         $trading = $this->http_input->getAllPostGet();
         if(empty($trading['txId'])){
-            return $this->http_output->notPut('', '请传入要查询的交易txId!');
+            return $this->http_output->notPut('', '请传入要查询的ActiontxId!');
         }
         $query_res = $this->TradingModel->queryTrading($trading['txId']);
         if(!$query_res['IsSuccess']) return $this->http_output->notPut('', '交易异常!');
