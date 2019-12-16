@@ -5,6 +5,14 @@ use app\Models\AppModel;
 use Server\CoreBase\Controller;
 use Server\Asyn\TcpClient\SdTcpRpcPool;
 use Server\CoreBase\SwooleException;
+use BitcoinPHP\BitcoinECDSA\BitcoinECDSA;
+use BitWasp\Bitcoin\Bitcoin;
+use BitWasp\Bitcoin\Crypto\Random\Random;
+use BitWasp\Bitcoin\Key\Factory\HierarchicalKeyFactory;
+use BitWasp\Bitcoin\Mnemonic\Bip39\Bip39Mnemonic;
+use BitWasp\Bitcoin\Mnemonic\Bip39\Bip39SeedGenerator;
+use BitWasp\Bitcoin\Mnemonic\MnemonicFactory;
+use Web3p\EthereumUtil\Util;
 use MongoDB;
 //自定义进程
 use app\Process\BlockProcess;
@@ -16,7 +24,6 @@ use app\Process\TimeClockProcess;
 use app\Process\CoreNetworkProcess;
 use app\Process\NodeProcess;
 use app\Process\PeerProcess;
-use BitcoinPHP\BitcoinECDSA\BitcoinECDSA;
 use Server\Components\Process\ProcessManager;
 
 use Server\Components\CatCache\CatCacheRpcProxy;
@@ -33,6 +40,8 @@ class TestController extends Controller
      * @var
      */
     protected $bitcoinECDSA;
+
+    protected $Bitcoin;
     protected function initialization($controller_name, $method_name)
     {
         parent::initialization($controller_name, $method_name);
@@ -43,6 +52,7 @@ class TestController extends Controller
         $this->ActionEncodeModel = $this->loader->model('Action/ActionEncodeModel', $this);
         //实例化椭圆曲线加密算法
         $this->bitcoinECDSA = new BitcoinECDSA();
+        $this->Bitcoin = new Bitcoin();
     }
 
     public function http_testAddress()
@@ -661,6 +671,7 @@ class TestController extends Controller
     public function http_encodeAction()
     {
         $action = $this->http_input->getAllPostGet();
+        var_dump($action);
         $res = [];
         switch ($action['actionType']){
             case  2 :
@@ -764,5 +775,82 @@ class TestController extends Controller
         return $this->http_output->end([$count, $recount]);
     }
 
+    public function http_getKeyStore()
+    {
+        // Bip39
+        $random = new Random();
+        // 生成随机数(initial entropy)
+        $entropy = $random->bytes(Bip39Mnemonic::MIN_ENTROPY_BYTE_LEN);
+        $bip39 = MnemonicFactory::bip39();
+        // 通过随机数生成助记词
+        $mnemonic = $bip39->entropyToMnemonic($entropy);
+        echo "mnemonic: " . $mnemonic.PHP_EOL.PHP_EOL;
+    }
 
+    public function http_getKey()
+    {
+        $mnemonic = $this->http_input->getAllPostGet();
+//        $mnemonic['keystore'] = 'spray lab satoshi ridge dial grit duty immense gate scrap return steel';
+        $seedGenerator = new Bip39SeedGenerator();
+        // 通过助记词生成种子，传入可选加密串'hello'
+        $seed = $seedGenerator->getSeed($mnemonic['keystore'], $mnemonic['pwd']);
+        echo "seed: " . $seed->getHex() . PHP_EOL;
+        $hdFactory = new HierarchicalKeyFactory();
+        $master = $hdFactory->fromEntropy($seed);
+        return $this->http_output->lists($master->getPrivateKey()->getHex());
+//        // 私钥
+//        echo "master private key: " . $master->getPrivateKey()->getHex().PHP_EOL;
+//        // 公钥
+//        echo "master public key: " . $master->getPublicKey()->getHex().PHP_EOL.PHP_EOL;
+    }
+
+    public function http_testKKK()
+    {
+        $pwd = $this->http_input->getAllPostGet();
+        $random = new Random();
+        // 生成随机数(initial entropy)
+        $entropy = $random->bytes(Bip39Mnemonic::MIN_ENTROPY_BYTE_LEN);
+        $bip39 = MnemonicFactory::bip39();
+        // 通过随机数生成助记词
+        $mnemonic = $bip39->entropyToMnemonic($entropy);
+        $seedGenerator = new Bip39SeedGenerator();
+        $seed = $seedGenerator->getSeed($mnemonic, $pwd['pwd']);
+        $hdFactory = new HierarchicalKeyFactory();
+        $master = $hdFactory->fromEntropy($seed);
+        //生成私钥
+
+        $this->bitcoinECDSA->setPrivateKey($master->getPrivateKey()->getHex());
+        $privatek = $master->getPrivateKey()->getHex();
+
+        $key_data['addressType'] = $key_data['addressType'] ?? 2;
+        //生成地址
+        $address = '';
+        switch ($key_data['addressType']){
+            case 1 :
+                $address = $this->BitcoinECDSA->getAddress();
+                //获取公钥
+                $publick = $this->BitcoinECDSA->getPubKey();
+                break;
+            case 2 :
+                //获取公钥
+                $publick = bin2hex(secp256k1_pubkey_create(hex2bin($privatek), true));
+                $address = hash('ripemd160', hash('sha256', hex2bin($publick), true));
+                break;
+            default :
+                //获取公钥
+                $publick = bin2hex(secp256k1_pubkey_create(hex2bin($privatek), true));
+                $address = hash('ripemd160', hash('sha256', hex2bin($publick), true));
+                break;
+        }
+
+        //组装返回结果
+        $res = [
+            'privateKey'    =>  $privatek,
+            'publicKey'     =>  $publick,
+            'address'       =>  $address,
+            'keyStore'       =>  $mnemonic,
+            'pwd'       =>  $pwd['pwd'],
+        ];
+        return $this->http_output->lists($res);
+    }
 }

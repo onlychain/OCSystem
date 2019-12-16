@@ -130,40 +130,24 @@ class BlockBaseModel extends Model
         $trading_info_all = [];//存储交易摘要和整交易
         $merkle_leaves = [];//存储默克尔树叶子节点
         //判断区块状态,决定是否要同步数据
-//        if($is_broadcast == 1){
-//            $check_block_state = $this->getBlockSituation($block_head);
-//            if (!$check_block_state['IsSuccess']){
-////                var_dump($check_block_state);
-//                return returnError($check_block_state['Message']);
-//            }
-//        }
-
         //验证上一个区块的哈希是否存在
+        $check_block_state = $this->getBlockSituation($block_head);
+        if (!$check_block_state['IsSuccess']){
+            return returnError($check_block_state['Message']);
+        }
+
         $block_where = ['headHash' => ['$in' => [$block_head['parentHash'], $block_head['headHash']]]];
         $block_data = ['headHash' => 1, 'parentHash' => 1];
         $block_res = ProcessManager::getInstance()
                                     ->getRpcCall(BlockProcess::class)
                                     ->getBloclHeadList($block_where, $block_data, 1, 2, []);
         if(empty($block_res['Data'])){
-//            var_dump($block_res['Data']);
-//            var_dump($block_where);
-//            var_dump($block_head);
             var_dump('区块数据有误，请重启系统进行同步.');
             $is_broadcast == 2 && ProcessManager::getInstance()
                                             ->getRpcCall(BlockProcess::class, true)
                                             ->setBlockState(1);
             $this->getBlockSituation($block_head);
             return returnError('区块数据有误，请重启.');
-//            var_dump(2);
-//            //判断数据库是否有区块数据
-//            $check_res = $this->checkBlockSync($block_head);
-//            var_dump(3);
-//            var_dump($check_res);
-//            if(!$check_res['IsSuccess']){
-//                return returnError('区块同步中.');
-//            }
-//            var_dump(4);
-//            return returnError('数据缺失.');
         }elseif (count($block_res['Data']) == 1 && $block_res['Data'][0]['headHash'] == $block_head['headHash']){
             var_dump('区块有误，需要重新同步区块.');
             return returnError('区块有误，需要重新同步区块.');
@@ -208,13 +192,7 @@ class BlockBaseModel extends Model
                     return returnError('action数据有误!');
                 }
                 if ($trading_type == 3 && !in_array($decode_action['actionType'], [5, 6, 7, 8])){
-                    var_dump(31);
                     //解析action后，执行相应的验证操作
-//                    $decode_action = $this->TradingEncode->decodeAction($bh_val);
-//                    if($decode_action == false){
-//                        continue;
-//                    }
-                    var_dump(32);
                     switch ($decode_action['actionType']){
                         case 2 :
                             $res = $this->VoteModel->checkVoteRequest(['action' => $decode_action], $bh_val, 1, 2);
@@ -228,18 +206,16 @@ class BlockBaseModel extends Model
                             break;
                     }
                     if(!$res['IsSuccess']){
-                        var_dump($res);
                         //验证不通过直接跳过
                         continue;
                     }
-                    var_dump(34);
                 }
-                $trading_info_hashs[] = $decode_action['txId'];
+
                 $trading_info_all[] = [
                     '_id'       =>  $decode_action['txId'],
                     'trading'   =>  $bh_val
                 ];
-
+//                $trading_info_hashs[] = $decode_action['txId'];
                 $merkle_leaves[] = $decode_action['txId'];
 
             }
@@ -258,35 +234,43 @@ class BlockBaseModel extends Model
                                         ->setSignature($block_head['signature'])
                                         ->setVersion($block_head['version'])
                                         ->packBlockHead();
-//        var_dump($block_head);
-//        var_dump($trading_info_hashs);
-////        var_dump('end');
         if($check_head['headHash'] !== $block_head['headHash']){
             var_dump('区块验证不通过：'.$block_head['height']);
             return returnError('区块验证不通过!');
         }
-        if ($is_broadcast != 1){
-            var_dump(4);
-            //处理交易
-            //删除交易
-//            var_dump($block_head);
-
-            !empty($trading_info_all) && ProcessManager::getInstance()
-                                                        ->getRpcCall(BlockProcess::class)
-                                                        ->checkTreading($trading_info_all, $trading_info_hashs);
-            var_dump(5);
-            $block_state = ProcessManager::getInstance()
-                                        ->getRpcCall(BlockProcess::class)
-                                        ->getBlockState();
-            $block_state == 3 && ProcessManager::getInstance()
-                                            ->getRpcCall(ConsensusProcess::class, true)
-                                            ->bookedPurse($block_head['tradingInfo']);
-            var_dump(6);
+        //获取节点身份
+        $identity = ProcessManager::getInstance()
+                                ->getRpcCall(ConsensusProcess::class)
+                                ->getNodeIdentity();
+        if ($is_broadcast != 1 && $identity != 'core'){
+            var_dump(10086);
+            //获取当前区块高度与哈希，进行防重复验证
+            $top_block_hash = CatCacheRpcProxy::getRpc()->offsetGet('topBlockHash');
+            if($top_block_hash != $block_head['parentHash']){
+                return returnError('区块父HASH有误');
+            }
+            //获取最新的区块高度
+            $top_block_height = CatCacheRpcProxy::getRpc()->offsetGet('topBlockHeight');
+            if ($top_block_height + 1 != $block_head['height']){
+                return returnError('区块高度有误.');
+            }
+            $all_actions = $block_head['tradingInfo'];
             $block_head['tradingInfo'] = $merkle_leaves;
             //写入区块
             ProcessManager::getInstance()
                             ->getRpcCall(BlockProcess::class, true)
                             ->insertBlockHead($block_head);
+            !empty($trading_info_all) && ProcessManager::getInstance()
+                                                        ->getRpcCall(BlockProcess::class)
+                                                        ->checkTreading($trading_info_all, $merkle_leaves);
+            $block_state = ProcessManager::getInstance()
+                                        ->getRpcCall(BlockProcess::class)
+                                        ->getBlockState();
+            $block_state == 3 && ProcessManager::getInstance()
+                                            ->getRpcCall(ConsensusProcess::class, true)
+                                            ->bookedPurse($all_actions);
+
+
             //清空缓存数据
             ProcessManager::getInstance()
                 ->getRpcCall(NodeProcess::class, true)
@@ -295,7 +279,6 @@ class BlockBaseModel extends Model
                 ->getRpcCall(VoteProcess::class, true)
                 ->clearVoteCache();
 
-            var_dump(7);
             ProcessManager::getInstance()
                         ->getRpcCall(PeerProcess::class, true)
                         ->broadcast(json_encode(['broadcastType' => 'Block', 'Data' => $block_head]));

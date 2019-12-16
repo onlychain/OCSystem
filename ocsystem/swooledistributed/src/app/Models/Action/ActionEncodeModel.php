@@ -9,6 +9,7 @@
 
 namespace app\Models\Action;
 
+use Noodlehaus\Exception;
 use Server\CoreBase\Model;
 use Server\CoreBase\ChildProxy;
 use Server\CoreBase\SwooleException;
@@ -46,7 +47,7 @@ class ActionEncodeModel extends Model
      * 存储备注信息
      * @var type
      */
-    protected $ins = '';
+    protected $ins = '0001';
 
     /**
      * 交易确认时间
@@ -169,7 +170,7 @@ class ActionEncodeModel extends Model
     {
         $this->setContext($context);
         //实例化椭圆曲线加密算法
-        $this->BitcoinECDSA = new BitcoinECDSA();
+//        $this->BitcoinECDSA = new BitcoinECDSA();
         $this->clearModel();
     }
 
@@ -309,9 +310,9 @@ class ActionEncodeModel extends Model
      */
     public function encodeAction()
     {
-        if($this->BitcoinECDSA == null){
-            $this->BitcoinECDSA = new BitcoinECDSA();
-        }
+//        if($this->BitcoinECDSA == null){
+//            $this->BitcoinECDSA = new BitcoinECDSA();
+//        }
         $encode_action_str = '';//存储序列化的action内容
         $encode_action_str .= $this->getVersion();//拼接版本号
         $encode_action_str .= $this->getActionType();//拼接action类型
@@ -326,7 +327,6 @@ class ActionEncodeModel extends Model
 //            if(!$encode_res['IsSuccess']){
 //                return $encode_res;
 //            }
-//            = $encode_res['Dat
         }
         switch ($this->getActionType()){
             case '02' : $encode_action_str .= '01';//00代表没有action数据，01代表有action数据
@@ -336,20 +336,18 @@ class ActionEncodeModel extends Model
                         $encode_action_str .= $this->encodePledgeAction();
                         break;
             default :  $encode_action_str .= '00';//00代表没有action数据，01代表有action数据
-                       $encode_action_str .= $this->encodeTradingAction();
+//                       $encode_action_str .= $this->encodeTradingAction();
                        break;
         }
         //拼接地址
-        $encode_action_str .= $this->getAddress();
+//        $encode_action_str .= $this->getAddress();
+        $encode_action_str .= $this->getPublicKey();
         //拼接自定义信息
         $encode_action_str .= $this->getIns();
-        if(!in_array($this->getActionType(), ['05', '06', '07', '08'])){
-            //拼接验签固定178个字符
-            //设置私钥
-            $this->BitcoinECDSA->setPrivateKey(bin2hex($this->getPrivateKey()));
-            $encode_action_str .= bin2hex($this->BitcoinECDSA->signMessage($encode_action_str, true));
-        }
-
+        $action_msg = hash('sha256', hash('sha256', hex2bin($encode_action_str), true), true);
+        //用私钥加密得到签名
+        $signa_ture = bin2hex(secp256k1_sign($this->getPrivateKey(), $action_msg));
+        $encode_action_str .= $signa_ture;
         return $encode_action_str;
     }
 
@@ -358,14 +356,14 @@ class ActionEncodeModel extends Model
      * @param string $encode_action
      * @return bool
      */
-    public function decodeAction(string $encode_action = '')
+    public function decodeAction(string $encode_action = '', int $type = 1)
     {
         if($encode_action == ''){
             return returnError('请输入action!');
         }
-        if($this->BitcoinECDSA == null){
-            $this->BitcoinECDSA = new BitcoinECDSA();
-        }
+//        if($this->BitcoinECDSA == null){
+//            $this->BitcoinECDSA = new BitcoinECDSA();
+//        }
         $str_index = 0;//序列化索引
         $action_arr = [];//存储序列化后的action数据
         //解析版本号
@@ -394,6 +392,9 @@ class ActionEncodeModel extends Model
         }else{
             //有交易，进行交易反序列化
             $trading = $this->decodeTrading($encode_action, $str_index);
+            if(isset($trading['IsSuccess']) && !$trading['IsSuccess']){
+                return false;
+            }
             $action_arr['trading'] = $trading['trading'];
             $str_index = $trading['index'];
         }
@@ -417,27 +418,47 @@ class ActionEncodeModel extends Model
                     break;
         }
         //解析地址
-        $action_arr['address'] = substr($encode_action, $str_index, 40);
-        $str_index += 40;
+//        $action_arr['address'] = substr($encode_action, $str_index, 40);
+//        $str_index += 40;
+        //解析公钥
+        $action_arr['originator'] = substr($encode_action, $str_index, 66);
+        $str_index += 66;
         //解析自定义信息内容
         $ins_len = hexdec(substr($encode_action, $str_index, 2));
         //索引递进2个字符
         $str_index += 2;
         $action_arr['ins'] = '00';substr($encode_action, $str_index, $ins_len * 2);
+        //索引递进2个字符
         $str_index += 2;
-        if(!in_array($action_arr['actionType'], [5, 6, 7, 8])){
-            //解析actionSign
-            $action_sign = hex2bin(substr($encode_action, $str_index, 176));
-            $check_res = $this->BitcoinECDSA->checkSignatureForMessage($action_arr['address'], $action_sign, substr($encode_action,0,strlen($encode_action)-176));
-            if(!$check_res){
+
+        //解析actionSign
+//        $action_sign = hex2bin(substr($encode_action, $str_index, 176));
+//        $check_res = $this->BitcoinECDSA->checkSignatureForMessage($action_arr['address'], $action_sign, substr($encode_action,0,strlen($encode_action)-176));
+//        if(!$check_res){
+//            return false;
+//        }
+//        $action_arr['actionSign'] = $action_sign;
+        //去除30固定内容,获取验签字节长度
+        if ($type == 1){
+            $sign_len = hexdec(substr($encode_action, $str_index + 2, 2)) * 2;
+
+            //索引递进2个字符
+            $sign = substr($encode_action, $str_index, $sign_len + 4);
+            $action_arr['actionSign'] = $sign;
+            //验证签名
+            $msg = substr($encode_action, 0, $str_index);
+            $msg = hash('sha256', hash('sha256', hex2bin($msg), true), true);
+            try{
+                if(!secp256k1_verify(hex2bin($action_arr['originator']), $msg, hex2bin($sign))){
+                    return false;
+                }
+            }catch (\Exception $e){
                 return false;
             }
-            $action_arr['actionSign'] = $action_sign;
-        }else{
-            $action_arr['actionSign'] = '';
+            //获取
+            //目前ins固定为00
+            $action_arr['txId'] = bin2hex(hash('sha256', hash('sha256', hex2bin($encode_action), true), true));
         }
-        //目前ins固定为00
-        $action_arr['txId'] = bin2hex(hash('sha256', hash('sha256', hex2bin($encode_action), true), true));
         return $action_arr;
     }
 
@@ -857,6 +878,9 @@ class ActionEncodeModel extends Model
      */
     public function getPublicKey() :string
     {
+        if($this->publicKey == ''){
+            return bin2hex(secp256k1_pubkey_create($this->getPrivateKey(), true));
+        }
         return $this->publicKey;
     }
 
@@ -896,6 +920,7 @@ class ActionEncodeModel extends Model
         if (!script_verify($ctx)) return returnError('交易验证失败3!');
         return returnSuccess();
     }
+
 
     /**
      * 设置脚本锁定类型
@@ -1200,7 +1225,7 @@ class ActionEncodeModel extends Model
         $this->vinNum = '';
         $this->vout = array();
         $this->voutNum = '';
-        $this->ins = '00';
+        $this->ins = '0001';
         $this->time = "00000000";
         $this->hex = "";
         $this->blockHash = "";

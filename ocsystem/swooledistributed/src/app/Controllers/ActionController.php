@@ -84,7 +84,6 @@ class ActionController extends Controller
      */
     public function http_receiveAction()
     {
-        //获取action数据
         $action_text = $this->http_input->getAllPostGet()['message'];
         if(empty($action_text)){
             return $this->http_output->notPut(1004);
@@ -197,6 +196,70 @@ class ActionController extends Controller
         return $this->http_output->lists($res);
     }
 
+    /**
+     * 生成私钥以及地址
+     */
+    public function http_createdAccount()
+    {
+        $key_data = $this->http_input->getAllPostGet();
+        //生成私钥
+        if (isset($key_data['privateKey'])){
+            $this->BitcoinECDSA->setPrivateKey($key_data['privateKey']);
+            $privatek = $key_data['privateKey'];
+        }else{
+            $this->BitcoinECDSA->generateRandomPrivateKey();
+            $privatek = $this->BitcoinECDSA->getPrivateKey();
+        }
+        $key_data['addressType'] = $key_data['addressType'] ?? 2;
+        //生成地址
+        $address = '';
+        switch ($key_data['addressType']){
+            case 1 :
+                $address = $this->BitcoinECDSA->getAddress();
+                //获取公钥
+                $publick = $this->BitcoinECDSA->getPubKey();
+                break;
+            case 2 :
+                //获取公钥
+                $publick = bin2hex(secp256k1_pubkey_create(hex2bin($privatek), true));
+                $address = hash('ripemd160', hash('sha256', hex2bin($publick), true));
+                break;
+            default :
+                //获取公钥
+                $publick = bin2hex(secp256k1_pubkey_create(hex2bin($privatek), true));
+                $address = hash('ripemd160', hash('sha256', hex2bin($publick), true));
+                break;
+        }
 
+        //组装返回结果
+        $res = [
+            'privateKey'    =>  $privatek,
+            'publicKey'     =>  $publick,
+            'address'       =>  $address,
+        ];
+        return $this->http_output->lists($res);
+    }
 
+    /**
+     * 通过keystore设置节点的私钥
+     */
+    public function http_setPrivate()
+    {
+        $pwd = $this->http_input->getAllPostGet();
+//        if (KEY_STORE == null || KEY_STORE == ''){
+//            var_dump('请重启系统并输入KEYSTORE.');
+//            $this->http_output->notPut('', '请重启系统并输入KEYSTORE');
+//        }
+        if (!isset($pwd['keyStore']) || empty($pwd['keyStore'])){
+            $this->http_output->notPut('', '请重启系统并输入KEYSTORE');
+        }
+        if(!isset($pwd['pwd']) || empty($pwd['pwd'])){
+            $this->http_output->notPut('', '请输入keyStore密码');
+        }
+        $res = ProcessManager::getInstance()->getRpcCall(ConsensusProcess::class)->getPrivateKey($pwd['keyStore'], $pwd['pwd']);
+        if (!$res['IsSuccess']){
+            $this->http_output->notPut('', $res['Message']);
+        }
+        return $this->http_output->yesPut();
+    }
 }
