@@ -74,6 +74,12 @@ class PeerProcess extends Process
     private $ActionEncodeModel;
 
     /**
+     * 区块缓存列表
+     * @var array
+     */
+    private $BlockList = [];
+
+    /**
      * 初始化函数
      * @param $process
      */
@@ -97,15 +103,17 @@ class PeerProcess extends Process
         $this->BitcoinECDSA = new BitcoinECDSA();
         //实例化投票模型
         $this->ActionEncodeModel = new ActionEncodeModel();
-        $this->init();
 
-        p2p_initialized([$this, 'KADInitialize']);
-        p2p_set_broadcast_handler([$this, 'getBroadcast']);
-        p2p_set_store_handler([$this, 'getStore']);
-        p2p_set_find_hash_handler([$this, 'setFindHash']);
-        p2p_set_get_value_handler([$this, 'setGetValue']);
-        $this->loading();
+//        $this->setPeer();
+//        p2p_initialized([$this, 'KADInitialize']);
+//        p2p_set_broadcast_handler([$this, 'getBroadcast']);
+//        p2p_set_store_handler([$this, 'getStore']);
+//        p2p_set_find_hash_handler([$this, 'setFindHash']);
+//        p2p_set_get_value_handler([$this, 'setGetValue']);
+//        $this->loading();
     }
+
+
 
     /**
      * 监听回调
@@ -114,7 +122,7 @@ class PeerProcess extends Process
     {
         swoole_timer_tick(10, function (){
             while (p2p_run_one()) {
-//				var_dump('空闲等待监听.');
+				var_dump('空闲等待监听.');
 			}
         });
     }
@@ -122,10 +130,10 @@ class PeerProcess extends Process
     /**
      * 初始化网络节点
      */
-    protected function init()
+    public function setPeer($address = '')
     {
         //获取节点名称，也就是地址
-        $node_name = get_instance()->config['address'];
+        $node_name = $address;
         if ($node_name == '' || ! is_string($node_name)){
             throw new \InvalidArgumentException('nodes name is null');
         }
@@ -137,6 +145,11 @@ class PeerProcess extends Process
         }
         //初始化P2P网络节点
         p2p_init($node_name, $seed_nodes, 8997);
+        p2p_initialized([$this, 'KADInitialize']);
+        p2p_set_broadcast_handler([$this, 'getBroadcast']);
+        p2p_set_store_handler([$this, 'getStore']);
+        p2p_set_find_hash_handler([$this, 'setFindHash']);
+        p2p_set_get_value_handler([$this, 'setGetValue']);
         return true;
     }
 
@@ -184,7 +197,7 @@ class PeerProcess extends Process
                     foreach ($values as $v_key => $v_val){
                         $decode_block[] = json_decode(stripslashes(html_entity_decode($v_val)), true);
                     }
-                    var_dump(1111);
+//                    var_dump(1111);
                     array_multisort(array_column($decode_block, 'height'),SORT_ASC, $decode_block);
                     //执行区块同步函数
                     ProcessManager::getInstance()
@@ -384,7 +397,41 @@ class PeerProcess extends Process
         //根据具体的广播数据进行处理，不合法就不再进行广播
         switch ($decode_content['broadcastType']){
             case 'Block' :
+                //对签名进行验证
+                if(isset($this->BlockList[$decode_content['Data']['headHash']])){
+                    var_dump('bye');
+                    return returnError('区块已存在.');
+                }
+//                $check_block_res = $this->BitcoinECDSA->checkSignatureForMessage($decode_content['Data']['signature'],
+//                                                                                $decode_content['Data']['blockSign'],
+//                                                                                $decode_content['Data']['headHash']);
+//                if (!$check_block_res){
+//                    return returnError('签名验证不通过.');
+//                }
+
+                try{
+                    if(!secp256k1_verify(hex2bin($decode_content['Data']['signature']),
+                        hex2bin($decode_content['Data']['headHash']),
+                        hex2bin($decode_content['Data']['blockSign']))){
+                        var_dump('验签失败');
+                        return returnSuccess('验签失败');
+                    }
+                }catch (\Exception $e){
+                    var_dump('验签失败2');
+                    return returnSuccess('验签失败');
+                }
+
+                if(!isset($this->BlockList[$decode_content['Data']['headHash']])){
+                    var_dump($decode_content['Data']['headHash']);
+                    $this->BlockList[$decode_content['Data']['headHash']] = time();
+                }
                 $res = $this->BlockModel->checkBlockRequest($decode_content['Data'], 2, 2);
+                var_dump(count($this->BlockList));
+                foreach ($this->BlockList as $bl_key => $bl_val){
+                    if ($bl_val +60 <= time()){
+                        unset($this->BlockList[$bl_key]);
+                    }
+                }
                 break;
             case 'Trading' :
                 $res = $this->TradingModel->checkTradingRequest($decode_content['Data'], 2, 2);
@@ -404,15 +451,6 @@ class PeerProcess extends Process
             case 'Action' :
                 $broadcast_message = $decode_content['Data'];
                 //验证签名
-                    var_dump($broadcast_message);
-//                $decode_content = $this->BitcoinECDSA->checkSignatureForRawMessage($broadcast_message);
-//                if(!$decode_content['IsSuccess']){
-//                    var_dump(1);
-//                    return returnError('签名失败.');
-//                }
-//                var_dump(2);
-//                $decode_content = $decode_content['Data'];
-//                var_dump($decode_content);
                 $decode_action['action'] = $this->ActionEncodeModel->decodeAction($broadcast_message);
                 if($decode_action['action'] == false){
                     return false;
@@ -425,7 +463,7 @@ class PeerProcess extends Process
                 }
                 //多余的操作，以后优化掉
                 $decode_action['address'] = $decode_action['action']['address'];
-                var_dump($decode_action);
+//                var_dump($decode_action);
                 switch ($decode_action['action']['actionType']){
                     case 2 :
                         $res = $this->VoteModel->checkVoteRequest($decode_action, $broadcast_message, 2);

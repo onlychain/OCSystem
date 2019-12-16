@@ -55,7 +55,7 @@ class TimeClockProcess extends Process
      * 核心节点个数
      * @var
      */
-    private $CoreNodeNum = 9;
+    private $CoreNodeNum = 3;
 
     /**
      * 初始化函数
@@ -244,22 +244,11 @@ class TimeClockProcess extends Process
                             ->getRpcCall(ConsensusProcess::class)
                             ->openConsensus();
                     }
-//                    //广播节点数据
-//                    ProcessManager::getInstance()
-//                        ->getRpcCall(PeerProcess::class, true)
-//                        ->broadcast(json_encode(['broadcastType' => 'Node', 'Data' => $examination_res['Data']['node']]));
-//
-//                    //广播超级节点
-//                    ProcessManager::getInstance()
-//                        ->getRpcCall(PeerProcess::class, true)
-//                        ->broadcast(json_encode(['broadcastType' => 'SuperNode', 'Data' => $rotation_res['Data']['superNode']]));
-
                     var_dump('round change over.');
                 }
                 ProcessManager::getInstance()
                             ->getRpcCall(ConsensusProcess::class, true)
                             ->chooseWork(ceil(getTickTime() / 1000) - $this->getDifference() % 126);
-//                var_dump((ceil(getTickTime() / 1000) - $this->getDifference()) % 126);
             }
     }
 
