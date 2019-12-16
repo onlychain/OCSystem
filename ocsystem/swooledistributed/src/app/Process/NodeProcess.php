@@ -279,7 +279,7 @@ class NodeProcess extends Process
         //执行节点健康检查函数
         $count = 1;
         foreach ($new_super_node as $nsn_key => $nsn_val){
-            if($nsn_key == get_instance()->config['address']){
+            if($nsn_key == CatCacheRpcProxy::getRpc()['address']){
                 $node_rounds = $count;
             }
             $new_super_node[$nsn_key]['voters'] = $incentive_users[$nsn_key] ?? [];

@@ -25,7 +25,13 @@ use MongoDB;
 
 //椭圆曲线加密算法
 use BitcoinPHP\BitcoinECDSA\BitcoinECDSA;
-
+use BitWasp\Bitcoin\Bitcoin;
+use BitWasp\Bitcoin\Crypto\Random\Random;
+use BitWasp\Bitcoin\Key\Factory\HierarchicalKeyFactory;
+use BitWasp\Bitcoin\Mnemonic\Bip39\Bip39Mnemonic;
+use BitWasp\Bitcoin\Mnemonic\Bip39\Bip39SeedGenerator;
+use BitWasp\Bitcoin\Mnemonic\MnemonicFactory;
+use Web3p\EthereumUtil\Util;
 //自定义进程
 
 use app\Process\PurseProcess;
@@ -116,6 +122,18 @@ class ConsensusProcess extends Process
     private $VoteModel;
 
     /**
+     * 节点私钥
+     * @var string
+     */
+    private $PrivateKey = '';
+
+    /**
+     * 私钥签名状态
+     * @var int
+     */
+    private $PrivateKeyState = 1;
+
+    /**
      * 节点身份，分为core（核心）,alternative（备选）,ordinary（普通）
      * @var string
      */
@@ -126,6 +144,12 @@ class ConsensusProcess extends Process
      * @var bool
      */
     private $openConsensus = false;
+
+    /**
+     * 椭圆曲线加密算法
+     * @var
+     */
+    private $BitcoinECDSA;
 
     /**
      * 每年出块数（比实际出块数多，主要用于计算）
@@ -171,6 +195,8 @@ class ConsensusProcess extends Process
 
         $this->VoteModel = new VoteModel();
         $this->VoteModel->initialization($context);
+
+        $this->BitcoinECDSA = new BitcoinECDSA();
 //        try {
 //            $this->chooseWork();
 //        } catch (\Exception $e) {
@@ -246,7 +272,8 @@ class ConsensusProcess extends Process
                                             ->getRpcCall(TimeClockProcess::class)
                                             ->getCreationTime();
                 //执行激励策略
-                $incenrive_data = $this->incentive(get_instance()->config['address'], $this_time);
+//                $incenrive_data = $this->incentive(CatCacheRpcProxy::getRpc()['address'], $this_time);
+                $incenrive_data = $this->incentive(CatCacheRpcProxy::getRpc()['publickey'], $this_time);
                 $page = 1;
                 $pagesize = 20000;
                 $trading_where = ['time' => ['$gte' => 1]];//time() - 2
@@ -313,18 +340,20 @@ class ConsensusProcess extends Process
                     $block_head = $this->BlockHead->setMerkleRoot($morker_tree_root)
                                                     ->setParentHash($top_block_hash)//上一个区块的哈希
                                                     ->setThisTime($system_time)//区块生成的项目时间
-                                                    ->setSignature(get_instance()->config['address'])//工作者签名
+                                                    ->setSignature(CatCacheRpcProxy::getRpc()['publickey'])//工作者签名
                                                     ->setHeight($top_block_height + 1)//区块高度先暂存，后期不上
                                                     ->setTxNum($trading_num)
                                                     ->setTradingInfo($encode_trading)
-                                                    ->packBlockHead();
+                                                    ->packBlockHead(2);
                     //替换交易内容为交易hash
 //                    $block_head['tradingInfo'] = $tradings;
                     $this->Block[$block_head['headHash']] = $block_head;
                     $this->Block[$block_head['headHash']]['tradingInfo'] = $tradings;
                     $this->Block[$block_head['headHash']]['state'] = true;
+                    $this->Block[$block_head['headHash']]['checkState'] = 1;
                     $this->Block[$block_head['headHash']]['out_time'] = time();
-                    $this->ConsensusResult[$block_head['headHash']][get_instance()->config['address']] = true;
+//                    $this->ConsensusResult[$block_head['headHash']][CatCacheRpcProxy::getRpc()['address']] = true;
+                    $this->ConsensusResult[$block_head['headHash']][CatCacheRpcProxy::getRpc()['publickey']] = true;
                     $this->ConsensusResult[$block_head['headHash']]['out_time'] = time();
                     $check_block = $this->getBlockMessage($block_head, $this_time, true);
 
@@ -353,14 +382,15 @@ class ConsensusProcess extends Process
      */
     public function superCheckBlock(array $check_block = [])
     {
+//        var_dump($check_block);
+        if($this->Identity != 'core'){
+            return returnError('节点未启动');
+        }
         $clock_state = ProcessManager::getInstance()
                                     ->getRpcCall(TimeClockProcess::class)
                                     ->getClockState();
-          $super_node = CatCacheRpcProxy::getRpc()->offsetGet('SuperNode');
+        $super_node = CatCacheRpcProxy::getRpc()->offsetGet('SuperNode');
         if (!$clock_state){
-            return returnError('节点未启动');
-        }
-        if($this->Identity != 'core'){
             return returnError('节点未启动');
         }
         if(empty($check_block)){
@@ -371,18 +401,49 @@ class ConsensusProcess extends Process
             var_dump('消息过期');
             return returnError('消息过期.');
         }
-        if(!in_array($check_block['id'], $super_node) || !in_array($check_block['createder'], $super_node)){
+        $createder = hash('ripemd160', hash('sha256', hex2bin($check_block['createder']), true));
+        $id = hash('ripemd160', hash('sha256', hex2bin($check_block['id']), true));
+        //对节点身份进行验证
+        if(!in_array($id, $super_node) || !in_array($createder, $super_node)){
             var_dump('区块节点身份有误.');
             return returnError('区块节点身份有误.');
         }
+        //验证区块发起人与区块出块人
         if(isset($this->Block[$check_block['data']['headHash']]['state']) && !$this->Block[$check_block['data']['headHash']]['state']){
             var_dump('区块已确认!');
             return returnError('区块已确认!');
         }
+//        $check_block_data = $check_block['data'];
+//        unset($check_block_data['headHash']);
+//        unset($check_block_data['blockSign']);
+        //对签名进行验证
+        if(empty($check_block['data']['blockSign'])){
+            return returnError('签名丢失.');
+        }
+//        $check_block_res = $this->BitcoinECDSA->checkSignatureForMessage($check_block['data']['signature'],
+//                                                                        $check_block['data']['blockSign'],
+//                                                                        $check_block['data']['headHash']);
+//        if (!$check_block_res){
+//            var_dump('验签失败');
+//            return returnSuccess('验签失败');
+//        }
+        try{
+            if(!secp256k1_verify(hex2bin($check_block['data']['signature']),
+                                    hex2bin($check_block['data']['headHash']),
+                                    hex2bin($check_block['data']['blockSign']))){
+                var_dump('验签失败');
+                return returnSuccess('验签失败');
+            }
+        }catch (\Exception $e){
+            var_dump('验签失败2');
+            return returnSuccess('验签失败');
+        }
+
         $check_res = true;//区块验证结果
         $error_msg = '';//区块失败原因
         //先判断是否是自身节点
-        if($check_block['createder'] != get_instance()->config['address'] && $check_block['createder'] == $check_block['id']){
+//        if (1==1){
+        if($check_block['createder'] != CatCacheRpcProxy::getRpc()['address'] && $check_block['createder'] == $check_block['id']){
             //还没有验证过区块，先验证，只存储确认过的区块数据
             if(empty($this->Block[$check_block['data']['headHash']])){
 //            if(1 == 1){
@@ -390,26 +451,46 @@ class ConsensusProcess extends Process
                 $this->ConsensusResult[$check_block['data']['headHash']]['out_time'] = time();
                 $this->Block[$check_block['data']['headHash']] = $check_block['data'];
                 $this->Block[$check_block['data']['headHash']]['state'] = true;
+                $this->Block[$check_block['data']['headHash']]['checkState'] = 1;
                 $this->Block[$check_block['data']['headHash']]['out_time'] = time();
                 //获取这个发起者
-                $incentive_res = $this->incentive($check_block['createder'], $check_block['time']);
+                $incentive_res = $this->incentive($check_block['createder'], $check_block['time'], 2);
                 if(!$incentive_res['IsSuccess']){
                     return returnError($incentive_res['Message']);
                 }
                 //验证激励交易
-                if(!empty(array_diff($incentive_res['Data'], $check_block['data']['tradingInfo']))){
+                $check_incentive = [];
+                $block_trading_info = [];
+                foreach ($check_block['data']['tradingInfo'] as $cdt_key => $cdt_val){
+                    $block_trading_info[] = bin2hex(hash('sha256', hash('sha256', hex2bin($cdt_val), true), true));
+                    if(preg_match('/^[A-Za-z0-9]{24}[0]{64}[A-Za-z0-9]+/', $cdt_val) == 1){
+                        $decode = $this->TradingEncode->decodeAction($cdt_val);
+                        unset($decode['txId']);
+                        unset($decode['actionSign']);
+                        $check_incentive[] = $decode;
+                    }
+                }
+//                if(!empty(array_diff($incentive_res['Data'], $check_incentive))){
+                if($check_incentive != $incentive_res['Data']){
                     $check_res = false;
+                    var_dump(json_encode($check_incentive));
+                    var_dump(json_encode($incentive_res['Data']));
+                    var_dump('激励交易有误');
                     $error_msg = '激励交易有误';
                 }else{
                     //验证区块
                     $block_check_res = $this->BlockBase->checkBlockRequest($check_block['data'], 3);
                     if(!$block_check_res['IsSuccess']){
                         $check_res = false;
+                        var_dump($block_check_res['Message']);
                         $error_msg = $block_check_res['Message'];
                     }
+//                    $this->Block[$check_block['data']['headHash']]['tradingInfo'] = $block_check_res['Data'];
                 }
+                $this->Block[$check_block['data']['headHash']]['tradingInfo'] = $block_trading_info;
+                $this->Block[$check_block['data']['headHash']]['checkState'] = 2;
 //                $this->Block[$check_block['data']['headHash']] = $check_block['data'];
-                $this->Block[$check_block['data']['headHash']]['tradingInfo'] = $block_check_res['Data'];
+
                 //返回验证结果
                 if(!$check_res){
                     var_dump("=========================================区块验证不通过=========================================");
@@ -417,10 +498,10 @@ class ConsensusProcess extends Process
                     var_dump('区块创建者:' . $check_block['createder']);
                     var_dump('区块发送者:' . $check_block['id']);
                     var_dump('原因:' . $error_msg);
-                    $this->ConsensusResult[$check_block['data']['headHash']][get_instance()->config['address']] = $check_res;
+                    $this->ConsensusResult[$check_block['data']['headHash']][CatCacheRpcProxy::getRpc()['address']] = $check_res;
                 }else{
                     //存储结果
-                    $this->ConsensusResult[$check_block['data']['headHash']][get_instance()->config['address']] = $check_res;
+                    $this->ConsensusResult[$check_block['data']['headHash']][CatCacheRpcProxy::getRpc()['address']] = $check_res;
                 }
                 //广播结果
                 $recheck_block = $this->getBlockMessage($check_block['data'], $check_block['time'], $check_res);
@@ -433,9 +514,9 @@ class ConsensusProcess extends Process
             }else{
                 var_dump('异常2');
 //                var_dump($check_block);
-//                return;
+                return;
             }
-        }elseif($check_block['id'] != get_instance()->config['address']){
+        }elseif($check_block['id'] != CatCacheRpcProxy::getRpc()['address']){
             $this->ConsensusResult[$check_block['data']['headHash']][$check_block['id']] = $check_block['res'];
             if(!isset($this->ConsensusResult[$check_block['data']['headHash']]['out_time'])){
                 $this->ConsensusResult[$check_block['data']['headHash']]['out_time'] = time();
@@ -452,7 +533,7 @@ class ConsensusProcess extends Process
         }else{
             var_dump('异常');
 //            var_dump($check_block);
-//            return;
+            return;
         }
         //循环判断当前区块是否可以存库
         $check_count = 0;
@@ -465,50 +546,45 @@ class ConsensusProcess extends Process
         var_dump('当前区块:'.$check_block['data']['headHash']);
         var_dump('确认数:'.$check_count);
         //判断是否可以上链
-//        if($check_count > 1){
-        if($check_count > (count(CatCacheRpcProxy::getRpc()->offsetGet('SuperNode')) * 2) / 3){
+        //获取系统设置的核心节点数量
+        $core_node_num = 100;
+        $core_node_num = ProcessManager::getInstance()->getRpcCall(TimeClockProcess::class)->getCoreNodeNum();
+        if($check_count < (($core_node_num * 2) / 3)){
             //没有超过半数节点，不做记录，判断这个节点是否已经超时
             return returnError();
         }
         //超过半数节点通过，执行相应操作`
         //把超时时间设置为0
-        $this->Block[$check_block['data']['headHash']]['state'] = false;
 //        $this->Block[$check_block['data']['headHash']]['out_time'] = 0;
+        if(!$this->Block[$check_block['data']['headHash']]['state']){
+            var_dump('????');
+            return;
+        }
+        $this->Block[$check_block['data']['headHash']]['state'] = false;
         //获取相应的交易数据
-//        $incentive_deals = [];//存储激励交易
-//        $encode_trading = [];//存储交易用于更新钱包
-//        $trading_hashs  = [];//txId集合
         $tradings  = [];//交易集合
-//        $page = 1;
-//        $pagesize = count($this->Block[$check_block['data']['headHash']]['tradingInfo']);
-//        $trading_where = ['_id' => ['$in' => $this->Block[$check_block['data']['headHash']]['tradingInfo']]];
-//        $trading_data = ['trading' => 1, '_id' => 1];
-//        $trading_res = ProcessManager::getInstance()
-//                                ->getRpcCall(TradingPoolProcess::class)
-//                                ->getTradingPoolList($trading_where, $trading_data, $page, $pagesize);
+        $block_trading_info = [];
         foreach ($check_block['data']['tradingInfo'] as $tr_key => $tr_val){
             $tx_id = bin2hex(hash('sha256', hash('sha256', hex2bin($tr_val), true), true));
-//            $encode_trading[] = $tr_val;
-//            $trading_hashs[] = $tx_id;
+            $block_trading_info[] = $tx_id;
             $tradings[] = [
                 '_id'       =>   $tx_id,
                 'trading'   =>  $tr_val,
             ];
-            //不广播激励交易
-//            $decode_action = $this->TradingEncode->decodeAction($tr_val);
-////            if(preg_match('/^[A-Za-z0-9]{4}[0]{64}[A-Za-z0-9]+/', $tr_val) == 1){
-//            if(in_array($decode_action['actionType'], [5, 6, 7, 8])){
-//                //广播激励action
-//                ProcessManager::getInstance()
-//                            ->getRpcCall(PeerProcess::class, true)
-//                            ->broadcast(json_encode(['broadcastType' => 'Action', 'Data' => $tr_val]));
-//            }
         }
-//        $tradings = $this->Block[$check_block['data']['headHash']]['tradingInfo'];
-        $insert_block_data = $this->Block[$check_block['data']['headHash']];
-//        $insert_block_data['tradingInfo'] = $encode_trading;
-        unset($insert_block_data['out_time']);
-        unset($insert_block_data['state']);
+        if($this->Block[$check_block['data']['headHash']]['checkState'] == 1){
+            $insert_block_data = $check_block['data'];
+            $insert_block_data['tradingInfo'] = $block_trading_info;
+        }elseif($this->Block[$check_block['data']['headHash']]['checkState'] == 2) {
+            $insert_block_data = $this->Block[$check_block['data']['headHash']];
+            unset($insert_block_data['out_time']);
+            unset($insert_block_data['state']);
+            unset($insert_block_data['checkState']);
+        }else{
+            var_dump("???");
+            return;
+        }
+
         //区块头上链
         $block_head_res = ProcessManager::getInstance()
                                         ->getRpcCall(BlockProcess::class)
@@ -518,7 +594,6 @@ class ConsensusProcess extends Process
                                     ->getRpcCall(TradingProcess::class, true)
                                     ->insertTradingMany($tradings);
 
-        var_dump(2);
         $delete_where = [
 //                            '$and'  =>  [['_id'  => ['$in'  => $insert_block_data['tradingInfo']]]],
                             '$or'   =>  [['time' => ['$lte' => time() - 300]], ['_id'  => ['$in'  => $insert_block_data['tradingInfo']]]]
@@ -526,24 +601,9 @@ class ConsensusProcess extends Process
         $trading_pool_res = ProcessManager::getInstance()
                                         ->getRpcCall(TradingPoolProcess::class)
                                         ->deleteTradingPoolMany($delete_where);
-        var_dump(3);
-
-//        $del_trading = ProcessManager::getInstance()
-//                                    ->getRpcCall(BlockProcess::class)
-//                                    ->checkTreading($tradings, $insert_block_data['tradingInfo']);
-        var_dump(1);
         if($trading_pool_res['IsSuccess']){
-            //操作成功,设置当前最新区块的高度跟哈希
-//            ProcessManager::getInstance()
-//                        ->getRpcCall(BlockProcess::class)
-//                        ->setTopBlockHash($this->Block[$check_block['data']['headHash']]['headHash']);
-//            ProcessManager::getInstance()
-//                        ->getRpcCall(BlockProcess::class)
-//                        ->setTopBlockHeight($this->Block[$check_block['data']['headHash']]['height']);
             //刷新action操作，包括投票、S质押、交易
-            var_dump(2);
             $this->bookedPurse($check_block['data']['tradingInfo']);
-            var_dump(3);
             //清空被使用的交易缓存
 //            CatCacheRpcProxy::getRpc()['Using'] = [];
             //清理用户交易次数
@@ -559,8 +619,8 @@ class ConsensusProcess extends Process
             var_dump("=========================================广播区块=========================================");
             //广播区块
             ProcessManager::getInstance()
-                ->getRpcCall(PeerProcess::class, true)
-                ->broadcast(json_encode(['broadcastType' => 'Block', 'Data' => $check_block['data']]));
+                        ->getRpcCall(PeerProcess::class, true)
+                        ->broadcast(json_encode(['broadcastType' => 'Block', 'Data' => $check_block['data']]));
 
             var_dump("=========================================清理缓存=========================================");
             var_dump(count($this->ConsensusResult));
@@ -584,7 +644,6 @@ class ConsensusProcess extends Process
                     if($b_val['out_time']  + 12 < time()){
                         //判断区块是否已经被确认，如果没有，需要返回区块交易数据
                         if($b_val['state']){
-                            var_dump(10086);
                             //没有被确认的区块，返回交易数据
                             ProcessManager::getInstance()
                                             ->getRpcCall(TradingPoolProcess::class, true)
@@ -592,10 +651,7 @@ class ConsensusProcess extends Process
                         }
                         var_dump('clear');
                         unset($this->Block[$b_key]);
-                    }else{
-                        var_dump($b_val['out_time']);
                     }
-
                 }
             }
             var_dump(date('Y-m-d H:i:s', time()));
@@ -625,7 +681,7 @@ class ConsensusProcess extends Process
             'request_id'    => time() . crc32('null_controller' . 'null_method' . getTickTime() . rand(1, 10000000)),
             'controller_name'   => 'null_controller',
             'method_name'   => 'null_method',
-            'ip'        =>  get_instance()->config['ip'],
+            'ip'        =>  getServerIp(),
         ];
     }
 
@@ -637,9 +693,9 @@ class ConsensusProcess extends Process
     {
 
         return $check_block = [
-            'id'        => get_instance()->config['address'],
+            'id'        => CatCacheRpcProxy::getRpc()['publickey'],
             'time'      =>  $time > 0 ? $time : time(),
-            'createder'   => get_instance()->config['address'],
+            'createder'   => CatCacheRpcProxy::getRpc()['publickey'],
             'data'      =>  $black_head,
             'res'       =>  $res,
         ];
@@ -693,7 +749,7 @@ class ConsensusProcess extends Process
     /**
      * 激励功能
      */
-    public function incentive($address = '', $work_time = 0)
+    public function incentive($publickey = '', $work_time = 0, $type = 1)
     {
         $node  = [];//存储节点数据
         $voter = [];//存储投票者数据
@@ -707,7 +763,8 @@ class ConsensusProcess extends Process
         $now_round = ProcessManager::getInstance()
             ->getRpcCall(TimeClockProcess::class)
             ->getRounds();
-        $address = $address !== '' ?  $address : get_instance()->config['address'];
+        $address = hash('ripemd160', hash('sha256', hex2bin($publickey), true));
+        $address = $address !== '' ?  $address : CatCacheRpcProxy::getRpc()['address'];
         //获取奖励列表
         $incentives = ProcessManager::getInstance()
             ->getRpcCall(IncentivesProcess::class)
@@ -745,27 +802,82 @@ class ConsensusProcess extends Process
 //        if(empty($voter)){
 //            return returnError('该节点不是超级节点.');
 //        }
-        //计算需要给当前节点前1000用户的代币
+        /**
+         * ************************************计算需要给当前节点前1000用户的代币************************************
+         */
         if(!empty($voter)){
-            $tradings_temp = $this->calculateVoterReward($table_num, array_slice($voter, 0, 1000), $incentives, $work_time, $address);
-            $tradings[] = $tradings_temp['Data']['trading'][0];
-            count($tradings_temp['Data']['trading']) == 2 && $tradings[] = $tradings_temp['Data']['trading'][1];
+            $voter_incentive = $this->calculateVoterReward($table_num,
+                                                            array_slice($voter, 0, 1000),
+                                                            $incentives,
+                                                            $work_time,
+                                                            $address,
+                                                            $publickey
+                                                        );
+            if ($type != 1){
+                $decode = $this->TradingEncode->decodeAction($voter_incentive['Data']['trading'], 2);
+                $tradings[] = $decode;
+            }else{
+                $tradings[] = $voter_incentive['Data']['trading'];
+            }
+//            $tradings[] = $type == 1 ? $tradings_temp: substr($tradings_temp, 0, strlen($tradings_temp)-176);
+//            count($tradings_temp['Data']['trading']) == 2 && $tradings[] = $tradings_temp['Data']['trading'][1];
         }
-        //计算节点自身可以获得的代币
-        $tradings[] = $this->calculateWorkerReward($table_num, $address, $incentives, $work_time)['Data']['trading'];
-        //计算30个主节点21核心节点+9备选节点可以获得的代币
-        !empty($node) &&  $node_res = $this->calculateNoderReward($table_num, $node, $incentives, $work_time, $address);
-        if($node_res['IsSuccess']){
-            $tradings[] = $node_res['Data']['trading'];
+        /**
+         * ************************************计算节点自身可以获得的代币************************************
+         */
+        $worke_incentive = $this->calculateWorkerReward($table_num,
+                                                        $address,
+                                                        $incentives,
+                                                        $work_time,
+                                                        $publickey
+                                                        );
+        if ($type != 1){
+            $decode = $this->TradingEncode->decodeAction($worke_incentive['Data']['trading'], 2);
+            $tradings[] = $decode;
+        }else{
+            $tradings[] = $worke_incentive['Data']['trading'];
         }
-        //计算社群可以获得的代币(地址要换)
-        $tradings[] = $this->calculateCommunityReward($table_num, $incentives, '792b9a33bebdd38114fa12c2699ed7112be40b95', $work_time, $address)['Data']['trading'];
-//        //更新激励数据
-//        ProcessManager::getInstance()
-//                        ->getRpcCall(IncentivesProcess::class)
-//                        ->updateIncentivesTable($incentives, $table_num);
-        //插入交易
-//        $this->TradingModel->createTradingMany($tradings, true);
+//        $tradings[] = $type == 1 ? $tradings_temp: substr($tradings_temp, 0, strlen($tradings_temp)-176);
+        /**
+         * ************************************计算30个主节点21核心节点+9备选节点可以获得的代币************************************
+         */
+        if(!empty($node)){
+            $node_incentive = $this->calculateNoderReward($table_num,
+                $node,
+                $incentives,
+                $work_time,
+                $address,
+                $publickey
+            );
+            if ($node_incentive['IsSuccess']){
+                if ($type != 1){
+                    $decode = $this->TradingEncode->decodeAction($node_incentive['Data']['trading'], 2);
+                    $tradings[] = $decode;
+                }else{
+                    $tradings[] = $node_incentive['Data']['trading'];
+                }
+            }
+        }
+//        if($node_res['IsSuccess']){
+//            $tradings[] = $node_res['Data']['trading'];//$type == 1 ? $node_res['Data']['trading']: substr($node_res['Data']['trading'], 0, strlen($node_res['Data']['trading'])-176);
+//        }
+        /**
+         * ************************************计算社群可以获得的代币(地址要换)************************************
+         */
+        $commun_incentive = $this->calculateCommunityReward($table_num,
+                                                    $incentives,
+                                                    '00e40caa57a129e567df123f4e8043f8e1852887',
+                                                    $work_time,
+                                                    $address,
+                                                    $publickey
+                                                    );
+        if ($type != 1){
+            $decode = $this->TradingEncode->decodeAction($commun_incentive['Data']['trading'], 2);
+            $tradings[] = $decode;
+        }else{
+            $tradings[] = $commun_incentive['Data']['trading'];
+        }
+//        $tradings[] = $type == 1 ? $tradings_temp: substr($tradings_temp, 0, strlen($tradings_temp)-176);
         return returnSuccess($tradings);
     }
 
@@ -773,7 +885,7 @@ class ConsensusProcess extends Process
      * 投票者激励
      * 当前块投票者获得的奖励
      */
-    public function calculateVoterReward($table_num = 0, $voters = [], &$incentives = [], $work_time = 0, $address)
+    public function calculateVoterReward($table_num = 0, $voters = [], &$incentives = [], $work_time = 0, $address, $public_key)
     {
         var_dump('voter');
         $voter_count = count($voters);//投票者数量
@@ -789,7 +901,7 @@ class ConsensusProcess extends Process
         $trading = [];//存储交易内容
         //最多只有前1000个用户
         $trading['tx'][0]['coinbase'] = 'No one breather who is worthier.';
-        $trading['from'] = get_instance()->config['address'];
+        $trading['from'] = CatCacheRpcProxy::getRpc()['address'];
         $count = $voter_count > 1000 ? 1000 : $voter_count;
         for($i = 0; $i < $count; ++$i){
             if($voters[$i]['value'] >= 1000000000000){
@@ -801,44 +913,21 @@ class ConsensusProcess extends Process
             }
         }
         //进行序列化
-        $tradings[] = $this->TradingEncode->setVin($trading['tx'])
-            ->setVout($trading['to'])
-            ->setTime($work_time)
-            ->setLockTime(0)
-            ->setActionType(5)
-            ->setAddress($address)
-            ->encodeAction();
+        $tradings = $this->TradingEncode->setVin($trading['tx'])
+                                            ->setVout($trading['to'])
+                                            ->setTime($work_time)
+                                            ->setLockTime(0)
+                                            ->setActionType(5)
+//                                            ->setAddress($address)
+                                            ->setPublicKey($public_key)
+                                            ->setPrivateKey($this->PrivateKey)
+                                            ->encodeAction();
 
 
-//        var_dump(3);
-//        if($voter_count > 1){
-//            var_dump(4);
-//            //大于500个人，拆成两笔交易
-//            $trading = [];
-//            $count = $voter_count > 1000 ? 1000 : $voter_count;
-//            for($i = 1; $i < $count; ++$i){
-//                if($voters[$i]['value'] >= 1000000000000){
-//                    $trading['to'][] = [
-//                        'address'   =>  $voters[$i]['address'],
-//                        'value'     =>  floor(($tokens * ($voters[$i]['value'] / $total_pledge)) / 1000),
-//                        'type'      =>  1,
-//                    ];
-//                }
-//
-//            }
-//            var_dump($trading);
-//            var_dump(5);
-//            $tradings[] = $this->TradingEncode->setVin($trading['tx'])
-//                                                ->setVout($trading['to'])
-//                                                ->setTime($work_time)
-//                                                ->setLockTime(0)
-//                                                ->setActionType(5)
-//                                                ->setAddress($address)
-//                                                ->encodeAction();
-//            var_dump(6);
-//        }
+
         $total = floor($tokens * $count);
         $incentives[$table_num]['voter'] -= $total;
+        var_dump(11);
         //返回交易以及处理好的数据
         return returnSuccess(['trading' => $tradings, 'incentives' => $incentives]);
     }
@@ -847,7 +936,7 @@ class ConsensusProcess extends Process
      * 工作节点激励
      * 21个工作节点出块固定奖励
      */
-    public function calculateWorkerReward($table_num = 0, $address = '', &$incentives = [], $work_time = 0)
+    public function calculateWorkerReward($table_num = 0, $address = '', &$incentives = [], $work_time = 0, $public_key)
     {
         var_dump('worker');
         //计算可获得的汤圆
@@ -860,18 +949,20 @@ class ConsensusProcess extends Process
         $trading = [];//存储交易内容
         //最多只有前1000个用户
         $trading['tx'][0]['coinbase'] = 'No one breather who is worthier.';
-        $trading['from'] = get_instance()->config['address'];
+        $trading['from'] = CatCacheRpcProxy::getRpc()['address'];
         $trading['to'][0]['address'] = $address;
         $trading['to'][0]['value'] = $tokens;
         $trading['to'][0]['type'] = 1;
         //把交易序列化
         $trading = $this->TradingEncode->setVin($trading['tx'])
-            ->setVout($trading['to'])
-            ->setTime($work_time)
-            ->setLockTime(0)
-            ->setActionType(7)
-            ->setAddress($address)
-            ->encodeAction();
+                                        ->setVout($trading['to'])
+                                        ->setTime($work_time)
+                                        ->setLockTime(0)
+                                        ->setActionType(7)
+//                                        ->setAddress($address)
+                                        ->setPublicKey($public_key)
+                                        ->setPrivateKey($this->PrivateKey)
+                                        ->encodeAction();
         return returnSuccess(['trading' => $trading]);
     }
 
@@ -879,7 +970,7 @@ class ConsensusProcess extends Process
      * 30个节点激励
      * 30个节点根据得票获得奖励
      */
-    public function calculateNoderReward($table_num = 0, $nodes = [], &$incentives = [], $work_time = 0, $address)
+    public function calculateNoderReward($table_num = 0, $nodes = [], &$incentives = [], $work_time = 0, $address, $public_key)
     {
         var_dump('noder');
         $balance = 0;//激励结余
@@ -894,7 +985,7 @@ class ConsensusProcess extends Process
         $trading = [];//存储交易内容
         //排名前30个节点，按照比例进行分配
         $trading['tx'][0]['coinbase'] = 'No one breather who is worthier.';
-        $trading['from'] = get_instance()->config['address'];
+        $trading['from'] = CatCacheRpcProxy::getRpc()['address'];
         $trading['to'] = [];
 //        var_dump($nodes);
         $total_vote = array_sum(array_column($nodes, 'voterNum'));
@@ -929,12 +1020,14 @@ class ConsensusProcess extends Process
         }
         //进行序列化
         $trading = $this->TradingEncode->setVin($trading['tx'])
-            ->setVout($trading['to'])
-            ->setTime($work_time)
-            ->setLockTime(0)
-            ->setActionType(6)
-            ->setAddress($address)
-            ->encodeAction();
+                                        ->setVout($trading['to'])
+                                        ->setTime($work_time)
+                                        ->setLockTime(0)
+                                        ->setActionType(6)
+//                                        ->setAddress($address)
+                                        ->setPublicKey($public_key)
+                                        ->setPrivateKey($this->PrivateKey)
+                                        ->encodeAction();
         //处理结余数据
         $incentives[$table_num]['noder']['balance'] = floor($balance
             + $tokens
@@ -947,7 +1040,7 @@ class ConsensusProcess extends Process
      * 社群激励
      * 社群固定奖励
      */
-    public function calculateCommunityReward($table_num = 0, &$incentives = [], $community_adderss = '792b9a33bebdd38114fa12c2699ed7112be40b95', $work_time = 0, $address)
+    public function calculateCommunityReward($table_num = 0, &$incentives = [], $community_adderss = '00e40caa57a129e567df123f4e8043f8e1852887', $work_time = 0, $address, $public_key)
     {
         var_dump('community');
         //计算可获得的汤圆
@@ -961,35 +1054,37 @@ class ConsensusProcess extends Process
         $trading = [];//存储交易内容
         //最多只有前1000个用户
         $trading['tx'][0]['coinbase'] = 'No one breather who is worthier.';
-        $trading['from'] = get_instance()->config['address'];
+        $trading['from'] = CatCacheRpcProxy::getRpc()['address'];
         $trading['to'][0]['address'] = $community_adderss;
         $trading['to'][0]['value'] = $tokens;
         $trading['to'][0]['type'] = 1;
         //把交易序列化
         $trading = $this->TradingEncode->setVin($trading['tx'])
-            ->setVout($trading['to'])
-            ->setTime($work_time)
-            ->setLockTime(0)
-            ->setActionType(8)
-            ->setAddress($address)
-            ->encodeAction();
+                                            ->setVout($trading['to'])
+                                            ->setTime($work_time)
+                                            ->setLockTime(0)
+                                            ->setActionType(8)
+//                                            ->setAddress($address)
+                                            ->setPublicKey($public_key)
+                                            ->setPrivateKey($this->PrivateKey)
+                                            ->encodeAction();
         return returnSuccess(['trading' => $trading]);
     }
 
     /**
      * 把已经确认的交易打入各自的钱包中
      * @param type $trading 交易合集
+     * @param type $type 1正常业务刷新缓存，2同步刷新缓存
      * @oneWay
      */
-    public function bookedPurse(array $trading = [])
+    public function bookedPurse(array $trading = [], $type = 1)
     {
         $insert_purse = [];//插入钱包集合
         $cache_purse = [];//更新缓存
         foreach ($trading as $t_key => $t_val){
-//            $decode_trading = $this->TradingEncode->decodeTrading($t_val);
             $decode_trading = $this->TradingEncode->decodeAction($t_val);
             if (!empty($decode_trading['trading'])){
-                if($decode_trading['actionType'] == 2 && $decode_trading['action']['again'] == 2){
+                if($decode_trading['actionType'] == 2 && $decode_trading['action']['again'] == 2 && $type == 1){
                     foreach ($decode_trading['trading']['vin'] as $dt_key => $dt_val){
                         $again_trading = CatCacheRpcProxy::getRpc()->offsetGet('Using'.$dt_val['txId'].$dt_val['n']);
                         $insert_purse[] = [
@@ -1045,6 +1140,9 @@ class ConsensusProcess extends Process
                         if($vin != null && !isset($vin['coinbase'])){
 //                            var_dump(CatCacheRpcProxy::getRpc()->offsetGet('Using' . $vin['txId'] .  $vin['n']));
                             unset(CatCacheRpcProxy::getRpc()['Using' . $vin['txId'] .  $vin['n']]);
+
+                            $this->PurseModel->delPurseTrading('', ['txId' => $vin['txId'], 'n' => $vin['n']]);
+                            //删除钱包交易数据
                         }
                     }, $decode_trading['trading']['vout'], $decode_trading['trading']['vin']);
                 }
@@ -1118,7 +1216,6 @@ class ConsensusProcess extends Process
                                     ->getRpcCall(IncentivesProcess::class)
                                     ->updateIncentivesTable($incentives, $table_num);
                     }
-
                     break;
             }
         }
@@ -1146,6 +1243,93 @@ class ConsensusProcess extends Process
         }
         return false;
     }
+
+    /**
+     * 根据助记词跟明文密码获取私钥
+     * @param string $mnemonic
+     * @param string $pwd
+     */
+    public function getPrivateKey($mnemonic = '', $pwd = '')
+    {
+        if ($this->PrivateKeyState == 2){
+            return returnError('请勿重复设置私钥.');
+        }
+        if ($mnemonic == ''){
+            return returnError('请传入助记词');
+        }
+        if ($pwd == ''){
+            return returnError('请传入明文密码');
+        }
+        $seedGenerator = new Bip39SeedGenerator();
+        // 通过助记词生成种子，传入可选加密串
+        $seed = $seedGenerator->getSeed($mnemonic, $pwd);
+        $hdFactory = new HierarchicalKeyFactory();
+        $master = $hdFactory->fromEntropy($seed);
+        //返回私钥
+        $res = $this->setPrivateKey($master->getPrivateKey()->getHex());
+        if (!$res['IsSuccess']){
+            return returnError('私钥设置失败.');
+        }
+        return returnSuccess();
+    }
+
+    /**
+     * 设置私钥以及地址
+     * @param string $private
+     */
+    private function setPrivateKey($private = '')
+    {   //设置本地私钥
+        $this->PrivateKey = $private;
+        //根据私钥计算出公钥以及地址
+        $this->BitcoinECDSA->setPrivateKey($this->PrivateKey);
+        //获取公钥跟地址
+        $public_key = bin2hex(secp256k1_pubkey_create(hex2bin($this->PrivateKey), true));
+        $address = hash('ripemd160', hash('sha256', hex2bin($public_key), true));
+        //设置p2p节点信息
+        ProcessManager::getInstance()->getRpcCall(PeerProcess::class)->setPeer($address);
+        //开始监听
+        ProcessManager::getInstance()->getRpcCall(PeerProcess::class, true)->loading();
+        //把地址写入配置文件缓存
+        CatCacheRpcProxy::getRpc()['publickey'] = $public_key;
+        CatCacheRpcProxy::getRpc()['address'] = $address;
+        $this->setPrivateKeyState(2);
+        return returnSuccess();
+    }
+
+    /**
+     * 给字符串加签
+     * @param string $str
+     * @return string
+     */
+    public function encodeNodeData(string $str = '')
+    {
+//        $this->BitcoinECDSA->setPrivateKey($this->PrivateKey);
+//        $encode_str = $this->BitcoinECDSA->signMessage($str, true);
+//        $trading_msg = hash('sha256', hash('sha256', hex2bin($str), true), true);
+        //用私钥加密得到签名
+        $encode_str = bin2hex(secp256k1_sign(hex2bin($this->PrivateKey), hex2bin($str)));
+        return $encode_str;
+    }
+
+
+    /**
+     * 设置私钥状态
+     * @param int $state 1：未设置私钥 2：已设置私钥
+     */
+    private function setPrivateKeyState($state = 1)
+    {
+        $this->PrivateKeyState = $state;
+    }
+
+    /**
+     * 获取私钥状态
+     * @return int
+     */
+    public function getPrivateKeyState()
+    {
+        return $this->PrivateKeyState;
+    }
+
 
     /**
      * 获取节点身份
@@ -1201,6 +1385,7 @@ class ConsensusProcess extends Process
     {
         return $this->index = $index;
     }
+
 
     /**
      * 进程结束函数

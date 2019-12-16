@@ -156,7 +156,7 @@ class CoreNetworkProcess extends Process
         $super_node_res = [];
         //循环发送给所有连接的节点
         foreach ($this->SuperNodeAddres as $sna_key => $sna_val){
-            if($sna_val == get_instance()->config['address']){
+            if($sna_val == CatCacheRpcProxy::getRpc()['address']){
                 continue;
             }
             //初始化变量
