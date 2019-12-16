@@ -59,7 +59,7 @@ class TimeModel extends Model
         return [
             'time'      =>  $time,
             'rounds'    =>  $round,
-            'id'        =>  get_instance()->config['address'],
+            'id'        =>  CatCacheRpcProxy::getRpc()['address'],
         ];
     }
 

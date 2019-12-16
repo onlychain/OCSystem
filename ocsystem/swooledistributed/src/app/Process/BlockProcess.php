@@ -14,14 +14,17 @@ use app\Models\Node\NodeModel;
 use app\Models\Block\MerkleTreeModel;
 use app\Models\Consensus\ConsensusModel;
 use app\Models\Node\VoteModel;
+use BitcoinPHP\BitcoinECDSA\BitcoinECDSA;
 use app\Models\Trading\TradingEncodeModel;
 use app\Models\Action\ActionEncodeModel;
+
 use Server\Asyn\MQTT\Exception;
 use Server\Components\Process\Process;
+use Server\Components\Process\ProcessManager;
 use Server\Components\CatCache\CatCacheRpcProxy;
 use MongoDB;
 
-use Server\Components\Process\ProcessManager;
+
 use app\Process\TradingPoolProcess;
 use app\Process\PeerProcess;
 use app\Process\TradingProcess;
@@ -97,13 +100,14 @@ class BlockProcess extends Process
      * 当前区块哈希
      * @var string
      */
-    private $BlockTopHash = '11f3aa827029d4bada3f3b0e5b131065c1d84489346ce8db09b3d378de4cf488';
+    private $BlockTopHash = '564216eb2469219c64dcbfbeaca939d38cfb1cdb39c776548681ba5682b5cef1';
+        //'564216eb2469219c64dcbfbeaca939d38cfb1cdb39c776548681ba5682b5cef1';//'bdec05be39801f477e15c73f67fa720f3ffc8803168616b819e1fdc4910554fd';
 
     /**
      * 每次获取区块的数量
      * @var int
      */
-    private $Pagesize = 40;
+    private $Pagesize = 30;
 
     /**
      * 获取区块的游码
@@ -131,6 +135,7 @@ class BlockProcess extends Process
         $this->ActionEncodeModel = new ActionEncodeModel();
         //节点相关方法
         $this->NodeModel = new NodeModel();
+        $this->BitcoinECDSA = new BitcoinECDSA();
     }
 
     /**
@@ -474,6 +479,36 @@ class BlockProcess extends Process
     }
 
     /**
+     * 验证区块签名
+     * @param array $block
+     * @return bool
+     */
+    protected function checkBlockSign($block = [])
+    {
+//        if(empty($block['blockSign'])){
+//            return returnError('区块签名缺失.');
+//        }
+//        $check_block_res = $this->BitcoinECDSA->checkSignatureForMessage($block['signature'],
+//                                                                            $block['blockSign'],
+//                                                                            $block['headHash']);
+//        if (!$check_block_res){
+//            return returnError('签名验证不通过.');
+//        }
+        try{
+            if(!secp256k1_verify(hex2bin($block['signature']),
+                hex2bin($block['headHash']),
+                hex2bin($block['blockSign']))){
+                var_dump('验签失败');
+                return returnSuccess('验签失败');
+            }
+        }catch (\Exception $e){
+            var_dump('验签失败2');
+            return returnSuccess('验签失败');
+        }
+        return returnSuccess();
+    }
+
+    /**
      * 同步区块函数
      * @oneWay
      */
@@ -598,8 +633,14 @@ class BlockProcess extends Process
                 //进行区块验证
                 $block_top_hash = $this->BlockTopHash;
                 $system_time = 0;
-                var_dump(64);
                 foreach ($block_data as $ba_key => $ba_val) {
+                    //先验证区块签名
+                    $check_block_sign = $this->checkBlockSign($ba_val);
+                    if(!$check_block_sign['IsSuccess']){
+                        var_dump($check_block_sign['Message']);
+                        $flag = true;
+                        break 2;
+                    }
 //                    $ba_val_temp = json_decode($ba_val, true);
                     $trading_info_hashs = [];//存储交易哈希
                     if(empty($ba_val['tradingInfo'])){
@@ -618,7 +659,9 @@ class BlockProcess extends Process
                     $check_block = $this->checkBlockData($ba_val, $trading_info_hashs);
                     if (!$check_block['IsSuccess']) {
                         var_dump('区块数据有误');
-                        return returnError('区块数据有误!');
+                        $flag = true;
+                        break 2;
+//                        return returnError('区块数据有误!');
                     }
 
                     $system_time = $ba_val['thisTime'];
@@ -628,35 +671,28 @@ class BlockProcess extends Process
                     $blocks[] = $ba_val;
                     $tradings_hash = array_merge($tradings_hash, $trading_info_hashs);
                 }
-                var_dump(65);
 //                $this->BlockTopHash = $block_top_hash;
                 //删除action池数据
                 ProcessManager::getInstance()->getRpcCall(TradingPoolProcess::class)->deleteTradingPoolMany(['_id' => ['$in' => $tradings_hash]]);
                 //删除action
-                var_dump(66);
                 ProcessManager::getInstance()->getRpcCall(TradingProcess::class)->deleteTradingPoolMany(['_id' => ['$in' => $tradings_hash]]);
                 //插入交易数据
-                var_dump(67);
                 ProcessManager::getInstance()->getRpcCall(TradingProcess::class)->insertTradingMany($block_tradings);
                 $delete_where = ['headHash' => ['$in' => $block_hashs]];
                 //删除区块数据
-                var_dump(68);
                 $this->deleteBloclHeadMany($delete_where);
                 //插入区块数据
-                var_dump(69);
                 $this->insertBlockHeadMany($blocks);
 
 //                $this->resetPurse(array_column($block_tradings,'trading'), $tradings_hash);
                 //删除投票数据
-                var_dump(610);
                 ProcessManager::getInstance()
                             ->getRpcCall(VoteProcess::class, true)
                             ->deleteVotePoolMany(['rounds' => ['$lt' => ceil($system_time / 126) + 1]]);
                 //刷新本地缓存数据
-                var_dump(611);
                 ProcessManager::getInstance()
                             ->getRpcCall(ConsensusProcess::class, true)
-                            ->bookedPurse(array_column($block_tradings,'trading'));
+                            ->bookedPurse(array_column($block_tradings,'trading'), 2);
 
 //                $this->CurrentBlockTopHeight += count($block_data);
                 if(count($block_data) == $this->Pagesize){
@@ -698,6 +734,15 @@ class BlockProcess extends Process
                 $block_top_hash = $this->BlockTopHash;
                 $system_time = 0;
                 foreach ($block_res['Data'] as $br_key => $br_val) {
+                    //对签名进行验证
+//                    var_dump($br_val);
+                    $check_block_sign = $this->checkBlockSign($br_val);
+                    if(!$check_block_sign['IsSuccess']){
+//                        var_dump($br_val);
+                        var_dump($check_block_sign['Message']);
+                        $flag = true;
+                        break 2;
+                    }
                     //验证区块数据
                     $trading_info_hashs = [];//存储交易哈希
                     $trading_info = [];//存储整交易
@@ -708,7 +753,6 @@ class BlockProcess extends Process
                             [],
                             1,
                             count($trading_info_hashs));
-
                     $full_trading = [];
                     foreach ($trading_info['Data'] as $ti_key => $tu_val){
                         //获取交易所在的key
@@ -721,7 +765,6 @@ class BlockProcess extends Process
                     $check_block = $this->checkBlockData($br_val, $trading_info_hashs);
                     //验证通过，赋值新的区块,否则执行请求函数
                     if(!$check_block['IsSuccess']){
-                        var_dump(121212);
                         var_dump('同步区块出错');
                         //用于请求数据
                         $flag = true;
@@ -741,7 +784,7 @@ class BlockProcess extends Process
                 //刷新本地缓存
                 ProcessManager::getInstance()
                             ->getRpcCall(ConsensusProcess::class, true)
-                            ->bookedPurse($block_tradings);
+                            ->bookedPurse($block_tradings, 2);
                 var_dump('limit++');
                 $this->CurrentBlockTopHeight = $this->Pagesize * $this->Limit;
                 ++$this->Limit;
@@ -900,45 +943,6 @@ class BlockProcess extends Process
         $trading_info = '';
         $count = count($cenesis_trading);
         foreach($cenesis_trading as $ct_key => $ct_val){
-//            if($ct_key + 2 < $count){
-//                $trading_info = $this->ActionEncodeModel->setVout($ct_val['trading']['to'])
-//                                                        ->setVin($ct_val['trading']['tx'])
-//                                                        ->setIns($ct_val['ins'])
-//                                                        ->setTime($ct_val['time'])
-//                                                        ->setLockTime($ct_val['trading']['lockTime'])
-//                                                        ->setPledge($ct_val['action']['pledge'])
-//                                                        ->setPledgeNode($ct_val['action']['pledgeNode'])
-//                                                        ->setIp($ct_val['action']['ip'])
-//                                                        ->setPort($ct_val['action']['port'])
-//                                                        ->setActionType($ct_val['actionType'])
-//                                                        ->setAddress($ct_val['address'])
-//                                                        ->setCreatedBlock(1)
-//                                                        ->encodeAction();
-//
-////                $nodes[] = [
-////                    'pledge' => [
-////                        [
-////                            'txId'          =>  bin2hex( hash('sha256', hash('sha256', hex2bin($trading_info), true), true)),
-////                            'value'         =>  $ct_val['trading']['to'][0]['value'],
-////                            'lockTime'      =>  $ct_val['trading']['lockTime'],
-////                        ]
-////                    ],
-////                    'address'         => $ct_val['trading']['to'][0]['address'],
-////                    'ip'              => $ct_val['action']['ip'],
-////                    'port'            => $ct_val['action']['port'],
-////                    'state'           => true,
-////                ];
-//            }else{
-//                $trading_info = $this->ActionEncodeModel->setVin($ct_val['trading']['tx'])
-//                                                        ->setVout($ct_val['trading']['to'])
-//                                                        ->setTime($ct_val['time'])
-//                                                        ->setLockTime(0)
-//                                                        ->setActionType($ct_val['actionType'])
-//                                                        ->setCreatedBlock(1)
-//                                                        ->setAddress($ct_val['address'])
-//                                                        ->setIns('')
-//                                                        ->encodeAction();
-//            }
             $tx_id = bin2hex( hash('sha256', hash('sha256', hex2bin($ct_val), true), true));
             $tx_ids[] = $tx_id;
             $trading[] = [
@@ -961,7 +965,7 @@ class BlockProcess extends Process
         $black_head = $this->BlockHead->setMerkleRoot($morker_tree_root)
                                     ->setParentHash($top_block_hash)//上一个区块的哈希
                                     ->setThisTime(1)//区块生成时间
-                                    ->setSignature('arnoldsaxon')//工作者签名
+                                    ->setSignature('025fee0dc100cc5adcac3ad455ab28b8aa6c89e080a946b3ba085f1750ede9b503')//工作者签名
                                     ->setHeight($top_block_height + 1)
                                     ->setTxNum(count($tx_ids))
                                     ->setTradingInfo($tradings)
@@ -978,14 +982,17 @@ class BlockProcess extends Process
             //不一致删除区块
             $this->deleteBloclHead(['height' => 1]);
         }
+//        var_dump($black_head);
+        //设置区块签名
+        $black_head['blockSign'] = '3045022100af1961f04e75efb1e86334a031dcd41bfc94e346330059a08ce6a11fef3318ba02204fd0f4ee2d4f805eed6ae62c5fc90ddb943fcd89f46f356f4487e8796cfeda3a';//'H+hp459Hd946jjnS6eyJjFEhUMkKyzOFCu5KcVvE+tnFHHYp2b+LUcDncwIkIt2WhJfRQpjk/vZ/4dysPEKV/yc=';
         //删除action
         ProcessManager::getInstance()
                         ->getRpcCall(TradingProcess::class, true)
-                        ->deleteTradingPool(['_id' => ['$in' => $black_head['tradingInfo']]]);
+                        ->deleteTradingPool(['_id' => ['$in' => $tx_ids]]);
         //删除钱包数据
         ProcessManager::getInstance()
                     ->getRpcCall(PurseProcess::class, true)
-                    ->deletePurseMany(['txId' => ['$in' => $black_head['tradingInfo']]]);
+                    ->deletePurseMany(['txId' => ['$in' => $tx_ids]]);
         //删除质押节点
         ProcessManager::getInstance()
                     ->getRpcCall(NodeProcess::class)
