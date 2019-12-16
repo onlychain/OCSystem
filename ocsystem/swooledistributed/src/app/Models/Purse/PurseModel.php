@@ -401,12 +401,26 @@ class PurseModel extends Model
 //        foreach ($trading as $t_key => $t_val){
 //            $txId[] = $t_val['txId'];
 //        }
+        $where = [];
+        if($address != ''){
+            $where['address'] = $address;
+        }
+        if(isset($trading['txId'])){
+            $where['txId'] = $trading['txId'];
+        }
+        if(isset($trading['n'])){
+            $where['n'] = $trading['n'];
+        }
+        if(empty($where)){
+            return returnError('删除条件不能为空.');
+        }
         //把新交易从数据库中删除
-        $where = ['address' => $address, 'txId' => $trading['txId'], 'n' => $trading['n']];
+//        $where = ['address' => $address, 'txId' => $trading['txId'], 'n' => $trading['n']];
 //        $data = ['$pull' => ['txId' => ['$in' => $txId]]];
-        $aaa = ProcessManager::getInstance()
+        $delete_res = ProcessManager::getInstance()
                                 ->getRpcCall(PurseProcess::class)
                                 ->deletePurse($where);
+        return returnSuccess();
     }
 
     /**

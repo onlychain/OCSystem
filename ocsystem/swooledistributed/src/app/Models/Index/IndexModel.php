@@ -36,6 +36,11 @@ class IndexModel extends Model
      * @var bool
      */
     private $checkState = false;
+    /**
+     * 是否检查过区块
+     * @var bool
+     */
+    private $privateState = false;
 
 
     /**
@@ -45,6 +50,7 @@ class IndexModel extends Model
     public function index()
     {
 //        var_dump('==================初始函数==================');
+
         if(!$this->checkState){
             //判断创世区块是否存在，不存在则插入
             $genesis_block = ProcessManager::getInstance()
@@ -54,7 +60,16 @@ class IndexModel extends Model
                 $this->checkState = true;
             }
         }
+        $private = ProcessManager::getInstance()
+                                ->getRpcCall(ConsensusProcess::class)
+                                ->getPrivateKeyState();
 
+        if(!$this->privateState && $private != 2){
+            var_dump('节点未设置私钥.');
+            return;
+        }else{
+            $this->privateState = true;
+        }
         $clock_state = ProcessManager::getInstance()
                                     ->getRpcCall(TimeClockProcess::class)
                                     ->getClockState();
@@ -220,7 +235,7 @@ class IndexModel extends Model
             $sync_clock_height = ProcessManager::getInstance()
                                             ->getRpcCall(BlockProcess::class)
                                             ->getSyncBlockTopHeight();//getTopBlockHeight
-            var_dump($sync_clock_height);
+//            var_dump($sync_clock_height);
             if(!$clock_state && $sync_clock_height < 10){
                 ProcessManager::getInstance()
                                 ->getRpcCall(BlockProcess::class, true)

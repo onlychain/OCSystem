@@ -300,9 +300,9 @@ class NodeModel extends Model
 //            return returnError($node_res['Message']);
 //        }
         //action入库
-        var_dump(2);
+//        var_dump(2);
         if($type == 1){
-            var_dump(3);
+//            var_dump(3);
             $insert_res = $this->TradingModel->createTradingEecode($encode_action);
             if(!$insert_res['IsSuccess']){
                 return returnError($insert_res['Message'], 'ffffffff');
@@ -325,7 +325,7 @@ class NodeModel extends Model
      */
     public function syncSuperNode(array $super_node = [])
     {
-        var_dump(1);
+//        var_dump(1);
         if(empty($super_node)){
             var_dump('节点为空');
             return returnError('节点为空');
@@ -360,7 +360,7 @@ class NodeModel extends Model
      */
     public function syncNode(array $node = [])
     {
-        var_dump(2);
+//        var_dump(2);
         if($this->NodeState){
             var_dump('备选节点已同步');
             return returnError('备选节点已同步');
